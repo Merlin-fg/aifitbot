@@ -1,15 +1,22 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
-from langchain_deepseek import ChatDeepSeek
 from src.config import LLM_PROVIDER, MODEL_NAME, API_KEY, BASE_URL
-from src.rag import create_rag_chain   # 新增导入
+from src.rag import create_rag_chain
 import streamlit as st
 
+
 def get_llm():
-    if LLM_PROVIDER == "deepseek":
-        return ChatDeepSeek(model=MODEL_NAME, api_key=API_KEY, base_url=BASE_URL, temperature=0.7)
+    """初始化 LLM，支持阿里云百炼（OpenAI 兼容）和 DeepSeek。"""
+    if LLM_PROVIDER in ("aliyun", "deepseek"):
+        return ChatOpenAI(
+            model=MODEL_NAME,
+            api_key=API_KEY,
+            base_url=BASE_URL,
+            temperature=0.7,
+        )
     else:
-        return ChatOpenAI(model=MODEL_NAME, api_key=API_KEY, base_url=BASE_URL, temperature=0.7)
+        raise ValueError(f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}")
+
 
 SYSTEM_PROMPT = """你是一位专业的私人健身教练与营养师。你有以下能力：
 1. 根据用户的身体数据（身高、体重、年龄、性别、目标、可用器材）设计训练计划。
@@ -24,21 +31,25 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}"),
 ])
 
+
 def get_response(llm, chat_history, user_input):
+    """普通对话模式：携带历史记录。"""
     chain = prompt | llm
     response = chain.invoke({
         "chat_history": chat_history,
-        "input": user_input
+        "input": user_input,
     })
     return response.content
 
+
 def get_chat_history():
+    """Streamlit 会话中的聊天记录。"""
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     return st.session_state.chat_history
 
-# ===== 新增：RAG 回复生成 =====
+
 def get_rag_response(llm, user_input):
+    """RAG 知识库增强模式（当前不含历史）。"""
     rag_chain = create_rag_chain(llm)
-    # 新链返回纯文本，直接使用
     return rag_chain.invoke(user_input)

@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 .streamlit/
 chroma_db/
+aifitbot.db
+data/

@@ -1,0 +1,56 @@
+{% if docs %}
+<table class="w-full text-sm">
+    <thead>
+        <tr class="border-b border-gray-100 text-left text-gray-500">
+            <th class="pb-2 font-medium">文件名</th>
+            <th class="pb-2 font-medium">类型</th>
+            <th class="pb-2 font-medium">大小</th>
+            <th class="pb-2 font-medium">块数</th>
+            <th class="pb-2 font-medium">状态</th>
+            <th class="pb-2 font-medium">上传时间</th>
+            <th class="pb-2 font-medium">操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for doc in docs %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50" id="row-{{ doc.id }}">
+            <td class="py-2 pr-3 text-gray-800 max-w-48 truncate" title="{{ doc.filename }}">{{ doc.filename }}</td>
+            <td class="py-2 pr-3">
+                <span class="px-1.5 py-0.5 rounded text-xs font-mono
+                    {% if doc.file_type == 'md' %}bg-blue-100 text-blue-700
+                    {% elif doc.file_type == 'pdf' %}bg-red-100 text-red-700
+                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                    {{ doc.file_type }}
+                </span>
+            </td>
+            <td class="py-2 pr-3 text-gray-500">{{ "%.1f"|format(doc.size_bytes / 1024) }} KB</td>
+            <td class="py-2 pr-3 text-gray-500">{{ doc.chunk_count }}</td>
+            <td class="py-2 pr-3">
+                {% if doc.status == 'ready' %}
+                <span class="text-green-600 text-xs">✅ 就绪</span>
+                {% elif doc.status == 'processing' %}
+                <span class="text-yellow-600 text-xs">⏳ 处理中</span>
+                {% else %}
+                <span class="text-red-600 text-xs" title="{{ doc.error_msg }}">❌ 失败</span>
+                {% endif %}
+            </td>
+            <td class="py-2 pr-3 text-gray-400 text-xs">{{ doc.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-2">
+                <button class="text-red-400 hover:text-red-600 text-xs"
+                        hx-delete="/api/admin/kb/documents/{{ doc.id }}"
+                        hx-confirm="确定删除「{{ doc.filename }}」？"
+                        hx-target="#row-{{ doc.id }}"
+                        hx-swap="outerHTML">
+                    删除
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="text-center py-12 text-gray-400">
+    <p class="text-3xl mb-2">📭</p>
+    <p>知识库为空，请上传文档</p>
+</div>
+{% endif %}

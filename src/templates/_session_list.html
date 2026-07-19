@@ -1,0 +1,17 @@
+{% if sessions %}
+    {% for sess in sessions %}
+    <div class="px-3 py-2 rounded-lg cursor-pointer text-sm flex items-center justify-between group
+                hover:bg-gray-100 transition session-item"
+         data-session-id="{{ sess.id }}"
+         onclick="switchSession({{ sess.id }}, this)">
+        <span class="truncate flex-1 text-gray-700">{{ sess.title }}</span>
+        <span class="hidden group-hover:flex gap-1 ml-1">
+            <button class="text-gray-400 hover:text-red-500 text-xs"
+                    onclick="event.stopPropagation(); deleteSession({{ sess.id }})"
+                    title="删除">🗑</button>
+        </span>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="text-xs text-gray-400 text-center mt-4">暂无历史会话</p>
+{% endif %}

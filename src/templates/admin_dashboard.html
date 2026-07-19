@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}管理仪表盘 - AIFitBot{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">📊 管理仪表盘</h1>
+
+<div class="grid grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 text-center">
+        <p class="text-3xl font-bold text-indigo-600">{{ stats.user_count }}</p>
+        <p class="text-sm text-gray-500 mt-1">注册用户</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 text-center">
+        <p class="text-3xl font-bold text-green-600">{{ stats.doc_count }}</p>
+        <p class="text-sm text-gray-500 mt-1">知识库文档</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 text-center">
+        <p class="text-3xl font-bold text-orange-600">{{ stats.session_count }}</p>
+        <p class="text-sm text-gray-500 mt-1">对话会话</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 text-center">
+        <p class="text-3xl font-bold text-purple-600">{{ stats.message_count }}</p>
+        <p class="text-sm text-gray-500 mt-1">消息总数</p>
+    </div>
+</div>
+
+<div class="grid grid-cols-2 gap-6">
+    <!-- 最近用户 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <h2 class="font-semibold text-gray-700 mb-3">👥 最近注册用户</h2>
+        {% if recent_users %}
+        <table class="w-full text-sm">
+            <thead><tr class="text-left text-gray-400 border-b"><th class="pb-2">用户名</th><th class="pb-2">角色</th><th class="pb-2">注册时间</th></tr></thead>
+            <tbody>
+                {% for u in recent_users %}
+                <tr class="border-b border-gray-50">
+                    <td class="py-2">{{ u.username }}</td>
+                    <td class="py-2"><span class="text-xs px-1.5 py-0.5 rounded {{ 'bg-purple-100 text-purple-700' if u.role.value == 'admin' else 'bg-gray-100 text-gray-600' }}">{{ u.role.value }}</span></td>
+                    <td class="py-2 text-gray-400">{{ u.created_at.strftime('%m-%d %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-gray-400 text-sm">暂无数据</p>
+        {% endif %}
+    </div>
+
+    <!-- 快速入口 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <h2 class="font-semibold text-gray-700 mb-3">🔗 快速入口</h2>
+        <div class="space-y-3">
+            <a href="/admin/kb" class="block p-3 bg-indigo-50 rounded-lg text-indigo-700 text-sm hover:bg-indigo-100 transition">
+                📚 知识库管理 — 上传/删除文档
+            </a>
+            <a href="/chat" class="block p-3 bg-green-50 rounded-lg text-green-700 text-sm hover:bg-green-100 transition">
+                💬 进入对话 — 测试问答效果
+            </a>
+            <a href="/api/health" class="block p-3 bg-gray-50 rounded-lg text-gray-700 text-sm hover:bg-gray-100 transition">
+                ❤️ 健康检查 — API /api/health
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

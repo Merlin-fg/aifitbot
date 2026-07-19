@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}首页 - AIFitBot{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-20 text-center">
+    <h1 class="text-4xl font-bold text-gray-800 mb-4">💪 AIFitBot</h1>
+    <p class="text-lg text-gray-500 mb-8">你的 AI 私人健身教练 —— 基于专业健身知识库的智能问答助手</p>
+
+    {% if user %}
+        <a href="/chat"
+           class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg text-base font-medium hover:bg-indigo-700 transition shadow-sm">
+            开始对话
+        </a>
+    {% else %}
+        <div class="flex justify-center gap-4">
+            <a href="/auth/login"
+               class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg text-base font-medium hover:bg-indigo-700 transition shadow-sm">
+                登录
+            </a>
+            <a href="/auth/register"
+               class="inline-block bg-white text-indigo-600 border border-indigo-300 px-6 py-3 rounded-lg text-base font-medium hover:bg-indigo-50 transition shadow-sm">
+                注册
+            </a>
+        </div>
+    {% endif %}
+
+    <div class="mt-16 grid grid-cols-3 gap-6 text-left">
+        <div class="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+            <div class="text-2xl mb-2">🏋️</div>
+            <h3 class="font-semibold text-gray-800 mb-1">专业训练指导</h3>
+            <p class="text-sm text-gray-500">基于运动科学知识库，提供准确的训练建议和动作要领</p>
+        </div>
+        <div class="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+            <div class="text-2xl mb-2">🍎</div>
+            <h3 class="font-semibold text-gray-800 mb-1">营养饮食规划</h3>
+            <p class="text-sm text-gray-500">增肌减脂饮食方案，引用专业知识库中的营养学依据</p>
+        </div>
+        <div class="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
+            <div class="text-2xl mb-2">📚</div>
+            <h3 class="font-semibold text-gray-800 mb-1">知识库溯源</h3>
+            <p class="text-sm text-gray-500">每条回答标注引用来源，言之有据，告别 AI 幻觉</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

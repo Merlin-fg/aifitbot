@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}对话 - AIFitBot{% endblock %}
+
+{% block content %}
+<div class="flex gap-4" style="height: calc(100vh - 120px);">
+    <!-- 左侧：会话列表 -->
+    <aside class="w-64 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col flex-shrink-0">
+        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-semibold text-gray-700 text-sm">💬 我的会话</h2>
+            <button onclick="newSession()"
+                    class="text-indigo-600 text-xl leading-none hover:bg-indigo-50 rounded-full w-7 h-7 flex items-center justify-center"
+                    title="新建会话">+</button>
+        </div>
+        <div id="session-list" class="flex-1 overflow-y-auto p-2 space-y-1"
+             hx-get="/chat/session/list"
+             hx-trigger="load, sessionChanged from:body"
+             hx-swap="innerHTML">
+            <p class="text-xs text-gray-400 text-center mt-4">加载中...</p>
+        </div>
+        <div class="p-3 border-t border-gray-100 space-y-1">
+            <a href="/auth/password" class="text-xs text-gray-400 hover:text-indigo-600 block text-center">⚙️ 修改密码</a>
+            {% if user.role.value == 'admin' %}
+            <a href="/admin/kb" class="text-xs text-gray-400 hover:text-indigo-600 block text-center">📚 知识库管理</a>
+            <a href="/admin/dashboard" class="text-xs text-gray-400 hover:text-indigo-600 block text-center">📊 管理仪表盘</a>
+            {% endif %}
+        </div>
+    </aside>
+
+    <!-- 右侧：对话区域 -->
+    <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-6 chat-container">
+            <div id="chat-welcome" class="text-center text-gray-400 mt-20">
+                <p class="text-5xl mb-4">💪</p>
+                <p class="text-lg font-medium text-gray-500">AIFitBot 健身教练</p>
+                <p class="text-sm mt-2">向我提问关于训练、饮食或拉伸的任何问题</p>
+            </div>
+        </div>
+
+        <!-- 底部输入区 -->
+        <div class="border-t border-gray-100 p-4">
+            <form id="chat-form" onsubmit="handleStreamSubmit(event)" class="m-0">
+                <input type="hidden" name="session_id" id="current-session-id" value="0">
+                <div class="flex gap-3">
+                    <input type="text" id="chat-input" name="question"
+                           class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="输入你的健身问题... (Enter 发送)" autofocus>
+                    <button type="submit" id="send-btn"
+                            class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex-shrink-0">
+                        发送
+                    </button>
+                    <button type="button" id="stop-btn" onclick="stopStream()"
+                            class="bg-red-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-red-600 transition flex-shrink-0"
+                            style="display:none">
+                        ⏹ 中断
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let activeSessionId = 0;
+let isStreaming = false;
+let streamAbortController = null;
+
+// === 流式提交 ===
+async function handleStreamSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('chat-input');
+    const question = input.value.trim();
+    if (!question || isStreaming) return;
+
+    // 立即清空输入框
+    input.value = '';
+
+    isStreaming = true;
+    document.getElementById('send-btn').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'inline-block';
+    document.getElementById('chat-welcome')?.remove();
+
+    const messages = document.getElementById('chat-messages');
+
+    // 添加用户消息
+    const userDiv = document.createElement('div');
+    userDiv.className = 'message-user';
+    userDiv.textContent = question;
+    messages.appendChild(userDiv);
+
+    // 添加 AI 回复占位
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'message-assistant typing-cursor';
+    aiDiv.id = 'streaming-response';
+    messages.appendChild(aiDiv);
+    messages.scrollTop = messages.scrollHeight;
+
+    // 构建请求（带 AbortController）
+    const formData = new FormData();
+    formData.append('question', question);
+    formData.append('session_id', activeSessionId);
+    streamAbortController = new AbortController();
+
+    try {
+        const resp = await fetch('/chat/stream', {
+            method: 'POST',
+            body: formData,
+            signal: streamAbortController.signal,
+        });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullAnswer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+
+            for (let i = 0; i < lines.length - 1; i++) {
+                const line = lines[i].trim();
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'session') {
+                        activeSessionId = data.session_id;
+                        document.getElementById('current-session-id').value = data.session_id;
+                    } else if (data.type === 'token') {
+                        fullAnswer += data.text;
+                        aiDiv.innerHTML = escapeHtml(fullAnswer).replace(/\n/g, '<br>') + '<span class="typing-cursor"></span>';
+                    } else if (data.type === 'references' && data.refs?.length) {
+                        let refHtml = '<details class="references-box mt-2"><summary class="cursor-pointer font-medium">📚 引用来源（' + data.refs.length + ' 条）</summary>';
+                        data.refs.forEach((ref, idx) => {
+                            refHtml += '<div class="text-xs mb-1"><span class="font-medium">[' + (idx+1) + '] ' + escapeHtml(ref.source) + '</span> <span class="text-gray-400">(相似度: ' + ref.score + ')</span><p class="text-gray-500 mt-0.5">' + escapeHtml(ref.content) + '...</p></div>';
+                        });
+                        refHtml += '</details>';
+                        aiDiv.innerHTML = escapeHtml(fullAnswer).replace(/\n/g, '<br>') + refHtml;
+                    } else if (data.type === 'error') {
+                        aiDiv.innerHTML = '<span class="text-red-500">⚠️ 生成失败: ' + escapeHtml(data.text) + '</span>';
+                    }
+                } catch {}
+            }
+            buffer = lines[lines.length - 1];
+            messages.scrollTop = messages.scrollHeight;
+        }
+        // 移除打字光标
+        aiDiv.classList.remove('typing-cursor');
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            // 用户主动中断——stopStream() 已经处理了按钮和显示，这里不再重复
+        } else {
+            aiDiv.innerHTML = '<span class="text-red-500">⚠️ 连接失败: ' + escapeHtml(err.message) + '</span>';
+            resetSendButton();
+        }
+    }
+
+    htmx.trigger('#session-list', 'sessionChanged');
+    resetSendButton();
+    input.focus();
+}
+
+// === 中断输出 ===
+function stopStream() {
+    if (streamAbortController) {
+        streamAbortController.abort();
+        streamAbortController = null;
+    }
+    // 立即恢复按钮状态
+    resetSendButton();
+    const aiDiv = document.getElementById('streaming-response');
+    if (aiDiv) {
+        aiDiv.classList.remove('typing-cursor');
+        if (aiDiv.textContent.trim() === '') {
+            aiDiv.innerHTML = '<span class="text-gray-400">⏹ 已中断</span>';
+        }
+    }
+}
+
+function resetSendButton() {
+    isStreaming = false;
+    streamAbortController = null;
+    document.getElementById('send-btn').style.display = 'inline-block';
+    document.getElementById('stop-btn').style.display = 'none';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// === 会话管理 ===
+async function switchSession(sid, el) {
+    activeSessionId = sid;
+    document.getElementById('current-session-id').value = sid;
+    document.querySelectorAll('.session-item').forEach(i => i.classList.remove('bg-indigo-50', 'text-indigo-700'));
+    if (el) {
+        el.classList.add('bg-indigo-50', 'text-indigo-700');
+    }
+    const resp = await fetch(`/chat/messages/${sid}`);
+    const html = await resp.text();
+    document.getElementById('chat-messages').innerHTML = html || '<div class="text-center text-gray-400 mt-20"><p class="text-5xl mb-4">💪</p><p class="text-lg font-medium text-gray-500">开始新对话</p></div>';
+}
+
+async function newSession() {
+    const formData = new FormData();
+    formData.append('title', '新对话');
+    const resp = await fetch('/chat/session/new', { method: 'POST', body: formData });
+    const data = await resp.json();
+    activeSessionId = data.session_id;
+    document.getElementById('current-session-id').value = data.session_id;
+    document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><p class="text-5xl mb-4">💪</p><p class="text-lg font-medium text-gray-500">开始新对话</p></div>';
+    htmx.trigger('#session-list', 'sessionChanged');
+}
+
+async function deleteSession(sid) {
+    if (!confirm('确定删除这个会话？')) return;
+    const formData = new FormData();
+    formData.append('session_id', sid);
+    await fetch('/chat/session/delete', { method: 'DELETE', body: formData });
+    if (activeSessionId === sid) {
+        activeSessionId = 0;
+        document.getElementById('current-session-id').value = '0';
+        document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><p class="text-5xl mb-4">💪</p><p class="text-lg font-medium text-gray-500">选择或创建一个会话开始对话</p></div>';
+    }
+    htmx.trigger('#session-list', 'sessionChanged');
+}
+</script>
+{% endblock %}
