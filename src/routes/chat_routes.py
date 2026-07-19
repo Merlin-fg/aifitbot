@@ -2,14 +2,11 @@
 
 import json
 import html
-import uuid
-import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request, Form, Query
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Request, Form
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session as DbSession
 
@@ -26,10 +23,6 @@ router = APIRouter(prefix="/chat", tags=["对话"])
 
 templates_dir = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
-
-# 内存中暂存待生成的流式任务
-_stream_tasks: dict[str, dict] = {}
-
 
 def get_rag_service() -> RAGService:
     """依赖注入：RAGService。"""
@@ -344,7 +337,6 @@ async def chat_stream(
                 if token:
                     full_answer += token
                     yield f"data: {json.dumps({'type': 'token', 'text': token})}\n\n"
-                    await asyncio.sleep(0.01)
 
             # 发送引用
             yield f"data: {json.dumps({'type': 'references', 'refs': references})}\n\n"

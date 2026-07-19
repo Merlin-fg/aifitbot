@@ -1,5 +1,4 @@
 import os
-import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,7 +32,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///aifitbot.db")
 # ============================================================
 # JWT 认证配置
 # ============================================================
-JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_urlsafe(32))
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("请在 .env 中设置 JWT_SECRET（用于签发和验证用户令牌）")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
@@ -41,10 +42,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 # 应用配置
 # ============================================================
 APP_TITLE = "AIFitBot - AI 私人健身教练"
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 
 # ============================================================
 # 管理员默认账号（首次启动时创建）
 # ============================================================
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "123456")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    import random, string
+    ADMIN_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    print(f"[AIFitBot] 自动生成管理员密码: {ADMIN_PASSWORD}")

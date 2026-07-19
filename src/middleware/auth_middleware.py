@@ -9,7 +9,7 @@ from sqlmodel import Session
 
 from src.config import JWT_SECRET, JWT_ALGORITHM
 from src.database import get_session
-from src.models.user import User
+from src.models.user import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
@@ -76,7 +76,7 @@ async def get_optional_user(
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
     """检查是否为管理员，非管理员返回 403。"""
-    if user.role.value != "admin":
+    if user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅管理员可访问此页面",

@@ -41,7 +41,8 @@ class UserRepository:
 
     def user_count(self) -> int:
         """返回用户总数。"""
-        return len(self.session.exec(select(User)).all())
+        from sqlmodel import func
+        return self.session.exec(select(func.count(User.id))).one()
 
     def get_recent(self, limit: int = 5) -> list[User]:
         """获取最近注册的用户。"""

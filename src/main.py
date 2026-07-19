@@ -9,15 +9,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 
-from src.config import APP_TITLE, APP_VERSION, ADMIN_USERNAME, ADMIN_PASSWORD
+from src.config import APP_TITLE, APP_VERSION, ADMIN_USERNAME, ADMIN_PASSWORD, ACCESS_TOKEN_EXPIRE_MINUTES
 from src.database import engine, init_db, get_session
 from src.models.user import User, UserRole
 from src.models.message import Message
 from src.models.session import Session as SessionModel
-from src.middleware.auth_middleware import get_optional_user, get_current_user
+from src.middleware.auth_middleware import get_optional_user, get_current_user, require_admin
 from src.services.auth_service import AuthService
 from src.routes import auth_routes, kb_routes, chat_routes
+from src.repositories.user_repo import UserRepository
+from src.repositories.document_repo import DocumentRepository
 from src.utils.logger import logger
+from sqlmodel import select, func
 
 
 # ============================================================
@@ -29,17 +32,20 @@ async def lifespan(app: FastAPI):
     logger.info(f"正在启动 {APP_TITLE} v{APP_VERSION} ...")
     init_db()
 
-    # 确保管理员账号存在
+    # 确保管理员账号存在（防多进程竞态）
     with Session(engine) as session:
         auth = AuthService(session)
         admin = auth.repo.get_by_username(ADMIN_USERNAME)
         if not admin:
-            auth.repo.create(
-                username=ADMIN_USERNAME,
-                hashed_password=auth.hash_password(ADMIN_PASSWORD),
-                role=UserRole.ADMIN,
-            )
-            logger.info(f"已创建默认管理员: {ADMIN_USERNAME}")
+            try:
+                auth.repo.create(
+                    username=ADMIN_USERNAME,
+                    hashed_password=auth.hash_password(ADMIN_PASSWORD),
+                    role=UserRole.ADMIN,
+                )
+                logger.info(f"已创建默认管理员: {ADMIN_USERNAME}")
+            except Exception:
+                logger.info(f"管理员账号已存在（由其他进程创建）: {ADMIN_USERNAME}")
         else:
             logger.info(f"管理员账号已存在: {ADMIN_USERNAME}")
 
@@ -105,7 +111,7 @@ async def handle_login(
 ):
     """处理登录表单，成功后跳转到 /chat。"""
     form = await request.form()
-    username = form.get("username", "")
+    username = form.get("username", "").strip()
     password = form.get("password", "")
 
     auth = AuthService(session)
@@ -121,7 +127,7 @@ async def handle_login(
         key="access_token",
         value=token,
         httponly=True,
-        max_age=1800,  # 30 分钟
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
     )
     return response
@@ -134,7 +140,7 @@ async def handle_register(
 ):
     """处理注册表单，成功后跳转到登录页。"""
     form = await request.form()
-    username = form.get("username", "")
+    username = form.get("username", "").strip()
     password = form.get("password", "")
     confirm_password = form.get("confirm_password", "")
 
@@ -237,7 +243,6 @@ async def handle_change_password(
 @app.get("/admin/kb")
 async def page_admin_kb(request: Request, user: User = Depends(get_current_user)):
     """知识库管理页面。"""
-    from src.middleware.auth_middleware import require_admin
     require_admin(user)
     return templates.TemplateResponse(request, "admin_kb.html", {"request": request, "user": user})
 
@@ -249,25 +254,16 @@ def page_admin_dashboard(
     session: Session = Depends(get_session),
 ):
     """管理员仪表盘。"""
-    from src.middleware.auth_middleware import require_admin
-    from src.repositories.user_repo import UserRepository
-    from src.repositories.document_repo import DocumentRepository
-    from sqlmodel import select
-
     require_admin(user)
 
     user_repo = UserRepository(session)
     doc_repo = DocumentRepository(session)
 
-    # 统计数据
-    all_sessions = list(session.exec(select(SessionModel)).all())
-    all_messages = list(session.exec(select(Message)).all())
-
     stats = {
         "user_count": user_repo.user_count(),
         "doc_count": len(doc_repo.list_all()),
-        "session_count": len(all_sessions),
-        "message_count": len(all_messages),
+        "session_count": session.exec(select(func.count(SessionModel.id))).one(),
+        "message_count": session.exec(select(func.count(Message.id))).one(),
     }
 
     recent_users = user_repo.get_recent(5)

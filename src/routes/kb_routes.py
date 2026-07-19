@@ -1,7 +1,6 @@
 """知识库管理路由（仅管理员）。"""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request, Form
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 from sqlmodel import Session
@@ -70,10 +69,3 @@ def api_delete(
     if not ok:
         raise HTTPException(404, msg)
     return {"message": msg}
-
-
-# ---- 页面路由（供 main.py 注册） ----
-
-async def page_admin_kb(request: Request, user: User = Depends(require_admin)):
-    """知识库管理页面（仅管理员可见）。"""
-    return templates.TemplateResponse(request, "admin_kb.html", {"request": request, "user": user})

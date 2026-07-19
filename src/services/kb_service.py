@@ -64,6 +64,7 @@ class KBService:
             return True, f"上传成功，已切分为 {chunk_count} 个知识块"
         except Exception as e:
             self.repo.update_status(doc.id, "error", error_msg=str(e))
+            self.vector_repo.delete_file(stored_name)
             logger.error(f"向量化失败: {original_filename}, {e}")
             return False, f"文档处理失败: {e}"
 

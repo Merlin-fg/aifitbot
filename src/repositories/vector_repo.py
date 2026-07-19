@@ -110,8 +110,11 @@ class VectorRepository:
     def delete_file(self, stored_name: str):
         """删除 data/ 目录下的原始文件。"""
         file_path = os.path.join(self.data_dir, stored_name)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except OSError as e:
+            logger.warning(f"文件删除失败: {file_path}, {e}")
 
     def as_retriever(self, k: int = 3):
         """返回检索器实例。"""

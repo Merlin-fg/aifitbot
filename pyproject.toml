@@ -1,6 +1,6 @@
 [project]
 name = "aifitbot"
-version = "0.1.0"
+version = "0.2.1"
 description = "AI 私人健身教练，支持多模型与对话记忆"
 readme = "README.md"
 requires-python = ">=3.13"

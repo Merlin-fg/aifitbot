@@ -1,7 +1,6 @@
 """用户认证相关路由：注册、登录、修改密码。"""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Form
-from fastapi.responses import RedirectResponse
 from sqlmodel import Session
 
 from src.database import get_session

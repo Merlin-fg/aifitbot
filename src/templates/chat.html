@@ -137,16 +137,18 @@ async function handleStreamSubmit(e) {
 }
 
 // 在当前视图中渲染或恢复流式 UI
-function renderStreamingUI(question) {
+function renderStreamingUI(question, skipUserMsg) {
     const messages = document.getElementById('chat-messages');
     document.getElementById('chat-welcome')?.remove();
     // 移除旧的流式占位（如果有）
     const old = document.getElementById('streaming-response');
     if (old) old.remove();
-    const userDiv = document.createElement('div');
-    userDiv.className = 'message-user';
-    userDiv.textContent = question || streamQuestion || '(发送中...)';
-    messages.appendChild(userDiv);
+    if (!skipUserMsg) {
+        const userDiv = document.createElement('div');
+        userDiv.className = 'message-user';
+        userDiv.textContent = question || streamQuestion || '(发送中...)';
+        messages.appendChild(userDiv);
+    }
     const aiDiv = document.createElement('div');
     aiDiv.className = 'message-assistant typing-cursor';
     aiDiv.id = 'streaming-response';
@@ -206,17 +208,15 @@ async function switchSession(sid, el) {
     if (el) el.classList.add('active');
     updateStopButton();
 
-    // 如果正在流式输出且切换到的就是流式会话，恢复 UI
-    if (isStreaming && streamingSessionId === sid) {
-        document.getElementById('chat-messages').innerHTML = '';
-        renderStreamingUI(null);
-        return;
-    }
-
-    // 否则从服务器加载历史
+    // 从服务器加载历史
     const r = await fetch('/chat/messages/' + sid);
     const h = await r.text();
     document.getElementById('chat-messages').innerHTML = h || '<div style="text-align:center;padding-top:80px;"><p style="font-size:3rem;">💪</p><p style="font-weight:600;color:#44403c;">开始新对话</p></div>';
+
+    // 如果正在流式输出且切换到的就是流式会话，在历史下方追加流式 UI
+    if (isStreaming && streamingSessionId === sid) {
+        renderStreamingUI(null, true);
+    }
 }
 
 async function newSession() {
