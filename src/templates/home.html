@@ -1,45 +1,42 @@
 {% extends "base.html" %}
-{% block title %}首页 - AIFitBot{% endblock %}
-
+{% block title %}AIFitBot - AI 私人健身教练{% endblock %}
 {% block content %}
-<div class="max-w-2xl mx-auto mt-20 text-center">
-    <h1 class="text-4xl font-bold text-gray-800 mb-4">💪 AIFitBot</h1>
-    <p class="text-lg text-gray-500 mb-8">你的 AI 私人健身教练 —— 基于专业健身知识库的智能问答助手</p>
-
+<div style="text-align:center;padding:60px 20px 40px;">
+    <p style="font-size:3rem;margin-bottom:8px;">💪</p>
+    <h1 style="font-size:2.25rem;font-weight:800;color:#292524;margin-bottom:12px;">AIFitBot</h1>
+    <p style="font-size:1.1rem;color:#78716c;max-width:480px;margin:0 auto 32px;line-height:1.7;">
+        你的 AI 私人健身教练，基于专业健身知识库的智能问答助手
+    </p>
     {% if user %}
-        <a href="/chat"
-           class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg text-base font-medium hover:bg-indigo-700 transition shadow-sm">
-            开始对话
-        </a>
+        <a href="/chat" class="btn btn-primary" style="padding:12px 32px;font-size:1rem;">开始对话</a>
     {% else %}
-        <div class="flex justify-center gap-4">
-            <a href="/auth/login"
-               class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg text-base font-medium hover:bg-indigo-700 transition shadow-sm">
-                登录
-            </a>
-            <a href="/auth/register"
-               class="inline-block bg-white text-indigo-600 border border-indigo-300 px-6 py-3 rounded-lg text-base font-medium hover:bg-indigo-50 transition shadow-sm">
-                注册
-            </a>
+        <div style="display:flex;justify-content:center;gap:12px;">
+            <a href="/auth/login" class="btn btn-primary" style="padding:12px 32px;font-size:1rem;">登录</a>
+            <a href="/auth/register" class="btn btn-outline" style="padding:12px 32px;font-size:1rem;">注册</a>
         </div>
     {% endif %}
+</div>
 
-    <div class="mt-16 grid grid-cols-3 gap-6 text-left">
-        <div class="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
-            <div class="text-2xl mb-2">🏋️</div>
-            <h3 class="font-semibold text-gray-800 mb-1">专业训练指导</h3>
-            <p class="text-sm text-gray-500">基于运动科学知识库，提供准确的训练建议和动作要领</p>
-        </div>
-        <div class="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
-            <div class="text-2xl mb-2">🍎</div>
-            <h3 class="font-semibold text-gray-800 mb-1">营养饮食规划</h3>
-            <p class="text-sm text-gray-500">增肌减脂饮食方案，引用专业知识库中的营养学依据</p>
-        </div>
-        <div class="bg-white rounded-lg p-5 shadow-sm border border-gray-100">
-            <div class="text-2xl mb-2">📚</div>
-            <h3 class="font-semibold text-gray-800 mb-1">知识库溯源</h3>
-            <p class="text-sm text-gray-500">每条回答标注引用来源，言之有据，告别 AI 幻觉</p>
-        </div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-top:20px;">
+    <div class="card" style="padding:24px;text-align:center;">
+        <p style="font-size:2rem;margin-bottom:8px;">🏋️</p>
+        <h3 style="font-weight:600;margin-bottom:6px;">专业训练指导</h3>
+        <p style="font-size:0.85rem;color:#78716c;line-height:1.6;">基于运动科学知识库，提供标准动作要领、训练计划、易错纠正</p>
+    </div>
+    <div class="card" style="padding:24px;text-align:center;">
+        <p style="font-size:2rem;margin-bottom:8px;">🍎</p>
+        <h3 style="font-weight:600;margin-bottom:6px;">营养饮食规划</h3>
+        <p style="font-size:0.85rem;color:#78716c;line-height:1.6;">增肌减脂饮食方案、热量计算、微量元素补充建议</p>
+    </div>
+    <div class="card" style="padding:24px;text-align:center;">
+        <p style="font-size:2rem;margin-bottom:8px;">📚</p>
+        <h3 style="font-weight:600;margin-bottom:6px;">知识库溯源</h3>
+        <p style="font-size:0.85rem;color:#78716c;line-height:1.6;">每条回答标注引用来源，言之有据，告别 AI 幻觉</p>
+    </div>
+    <div class="card" style="padding:24px;text-align:center;">
+        <p style="font-size:2rem;margin-bottom:8px;">💬</p>
+        <h3 style="font-weight:600;margin-bottom:6px;">多轮对话</h3>
+        <p style="font-size:0.85rem;color:#78716c;line-height:1.6;">上下文连贯的多轮问答，支持多会话管理和历史回顾</p>
     </div>
 </div>
 {% endblock %}

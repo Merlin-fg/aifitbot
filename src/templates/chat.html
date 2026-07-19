@@ -1,56 +1,49 @@
 {% extends "base.html" %}
 {% block title %}对话 - AIFitBot{% endblock %}
-
 {% block content %}
-<div class="flex gap-4" style="height: calc(100vh - 120px);">
-    <!-- 左侧：会话列表 -->
-    <aside class="w-64 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col flex-shrink-0">
-        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 class="font-semibold text-gray-700 text-sm">💬 我的会话</h2>
-            <button onclick="newSession()"
-                    class="text-indigo-600 text-xl leading-none hover:bg-indigo-50 rounded-full w-7 h-7 flex items-center justify-center"
-                    title="新建会话">+</button>
+<div style="display:flex;gap:16px;height:calc(100vh - 130px);">
+    <!-- 左侧会话列表 -->
+    <aside class="card" style="width:240px;flex-shrink:0;display:flex;flex-direction:column;">
+        <div style="padding:16px;border-bottom:1px solid #e7e5e4;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-weight:600;font-size:0.85rem;color:#292524;">💬 我的会话</span>
+            <button onclick="newSession()" class="btn btn-ghost" style="padding:4px 8px;font-size:1.2rem;border-radius:6px;" title="新建会话">+</button>
         </div>
-        <div id="session-list" class="flex-1 overflow-y-auto p-2 space-y-1"
+        <div id="session-list" class="session-list" style="flex:1;overflow-y:auto;padding:8px;"
              hx-get="/chat/session/list"
              hx-trigger="load, sessionChanged from:body"
              hx-swap="innerHTML">
-            <p class="text-xs text-gray-400 text-center mt-4">加载中...</p>
+            <p style="text-align:center;color:#a8a29e;font-size:0.8rem;padding:20px 0;">加载中...</p>
         </div>
-        <div class="p-3 border-t border-gray-100 space-y-1">
-            <a href="/auth/password" class="text-xs text-gray-400 hover:text-indigo-600 block text-center">⚙️ 修改密码</a>
+        <div style="padding:12px;border-top:1px solid #e7e5e4;font-size:0.75rem;text-align:center;">
+            <a href="/auth/password" style="color:#a8a29e;text-decoration:none;">⚙️ 修改密码</a>
             {% if user.role.value == 'admin' %}
-            <a href="/admin/kb" class="text-xs text-gray-400 hover:text-indigo-600 block text-center">📚 知识库管理</a>
-            <a href="/admin/dashboard" class="text-xs text-gray-400 hover:text-indigo-600 block text-center">📊 管理仪表盘</a>
+            <span style="color:#d6d3d1;">|</span>
+            <a href="/admin/kb" style="color:#a8a29e;text-decoration:none;">📚 知识库</a>
             {% endif %}
         </div>
     </aside>
 
-    <!-- 右侧：对话区域 -->
-    <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-6 chat-container">
-            <div id="chat-welcome" class="text-center text-gray-400 mt-20">
-                <p class="text-5xl mb-4">💪</p>
-                <p class="text-lg font-medium text-gray-500">AIFitBot 健身教练</p>
-                <p class="text-sm mt-2">向我提问关于训练、饮食或拉伸的任何问题</p>
+    <!-- 右侧对话区 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;">
+        <div id="chat-messages" class="chat-container" style="flex:1;overflow-y:auto;">
+            <div id="chat-welcome" style="text-align:center;padding-top:80px;">
+                <p style="font-size:3rem;margin-bottom:12px;">💪</p>
+                <p style="font-size:1.1rem;font-weight:600;color:#44403c;">AIFitBot 健身教练</p>
+                <p style="font-size:0.85rem;color:#a8a29e;margin-top:6px;">向我提问关于训练、饮食或拉伸的任何问题</p>
             </div>
         </div>
 
-        <!-- 底部输入区 -->
-        <div class="border-t border-gray-100 p-4">
-            <form id="chat-form" onsubmit="handleStreamSubmit(event)" class="m-0">
+        <div style="padding:16px;border-top:1px solid #e7e5e4;">
+            <form id="chat-form" onsubmit="handleStreamSubmit(event)" style="margin:0;">
                 <input type="hidden" name="session_id" id="current-session-id" value="0">
-                <div class="flex gap-3">
-                    <input type="text" id="chat-input" name="question"
-                           class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="输入你的健身问题... (Enter 发送)" autofocus>
-                    <button type="submit" id="send-btn"
-                            class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex-shrink-0">
+                <div style="display:flex;gap:10px;">
+                    <input type="text" id="chat-input" name="question" class="input"
+                           style="flex:1;" placeholder="输入你的健身问题..." autofocus>
+                    <button type="submit" id="send-btn" class="btn btn-primary" style="padding:10px 20px;flex-shrink:0;">
                         发送
                     </button>
                     <button type="button" id="stop-btn" onclick="stopStream()"
-                            class="bg-red-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-red-600 transition flex-shrink-0"
-                            style="display:none">
+                            class="btn btn-danger" style="padding:10px 16px;flex-shrink:0;display:none;">
                         ⏹ 中断
                     </button>
                 </div>
@@ -62,166 +55,189 @@
 <script>
 let activeSessionId = 0;
 let isStreaming = false;
+let streamingSessionId = 0;
 let streamAbortController = null;
+let streamFullAnswer = '';
+let streamReferences = null;
+let streamQuestion = '';
 
-// === 流式提交 ===
 async function handleStreamSubmit(e) {
     e.preventDefault();
     const input = document.getElementById('chat-input');
     const question = input.value.trim();
     if (!question || isStreaming) return;
-
-    // 立即清空输入框
     input.value = '';
 
+    const sid = activeSessionId;
     isStreaming = true;
-    document.getElementById('send-btn').style.display = 'none';
-    document.getElementById('stop-btn').style.display = 'inline-block';
-    document.getElementById('chat-welcome')?.remove();
+    streamingSessionId = sid;
+    streamFullAnswer = '';
+    streamReferences = null;
+    streamQuestion = question;
+    updateStopButton();
 
-    const messages = document.getElementById('chat-messages');
+    // 在当前 chat-messages 中添加用户消息和 AI 占位
+    renderStreamingUI(question);
 
-    // 添加用户消息
-    const userDiv = document.createElement('div');
-    userDiv.className = 'message-user';
-    userDiv.textContent = question;
-    messages.appendChild(userDiv);
-
-    // 添加 AI 回复占位
-    const aiDiv = document.createElement('div');
-    aiDiv.className = 'message-assistant typing-cursor';
-    aiDiv.id = 'streaming-response';
-    messages.appendChild(aiDiv);
-    messages.scrollTop = messages.scrollHeight;
-
-    // 构建请求（带 AbortController）
     const formData = new FormData();
     formData.append('question', question);
-    formData.append('session_id', activeSessionId);
+    formData.append('session_id', sid);
     streamAbortController = new AbortController();
 
     try {
-        const resp = await fetch('/chat/stream', {
-            method: 'POST',
-            body: formData,
-            signal: streamAbortController.signal,
-        });
+        const resp = await fetch('/chat/stream', { method:'POST', body:formData, signal:streamAbortController.signal });
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let fullAnswer = '';
-
         while (true) {
-            const { done, value } = await reader.read();
+            const {done, value} = await reader.read();
             if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+            buffer += decoder.decode(value, {stream:true});
             const lines = buffer.split('\n');
-
-            for (let i = 0; i < lines.length - 1; i++) {
+            for (let i=0;i<lines.length-1;i++) {
                 const line = lines[i].trim();
                 if (!line.startsWith('data: ')) continue;
                 try {
                     const data = JSON.parse(line.slice(6));
-                    if (data.type === 'session') {
-                        activeSessionId = data.session_id;
-                        document.getElementById('current-session-id').value = data.session_id;
-                    } else if (data.type === 'token') {
-                        fullAnswer += data.text;
-                        aiDiv.innerHTML = escapeHtml(fullAnswer).replace(/\n/g, '<br>') + '<span class="typing-cursor"></span>';
-                    } else if (data.type === 'references' && data.refs?.length) {
-                        let refHtml = '<details class="references-box mt-2"><summary class="cursor-pointer font-medium">📚 引用来源（' + data.refs.length + ' 条）</summary>';
-                        data.refs.forEach((ref, idx) => {
-                            refHtml += '<div class="text-xs mb-1"><span class="font-medium">[' + (idx+1) + '] ' + escapeHtml(ref.source) + '</span> <span class="text-gray-400">(相似度: ' + ref.score + ')</span><p class="text-gray-500 mt-0.5">' + escapeHtml(ref.content) + '...</p></div>';
-                        });
-                        refHtml += '</details>';
-                        aiDiv.innerHTML = escapeHtml(fullAnswer).replace(/\n/g, '<br>') + refHtml;
-                    } else if (data.type === 'error') {
-                        aiDiv.innerHTML = '<span class="text-red-500">⚠️ 生成失败: ' + escapeHtml(data.text) + '</span>';
+                    if (data.type==='session') {
+                        streamingSessionId = data.session_id;
+                        if (activeSessionId === 0) { activeSessionId = data.session_id; document.getElementById('current-session-id').value = data.session_id; }
+                    } else if (data.type==='token') {
+                        streamFullAnswer += data.text;
+                        if (activeSessionId === streamingSessionId) {
+                            updateStreamingDOM();
+                        }
+                    } else if (data.type==='references') {
+                        streamReferences = data.refs;
+                        if (activeSessionId === streamingSessionId) {
+                            updateStreamingDOM();
+                        }
+                    } else if (data.type==='error') {
+                        if (activeSessionId === streamingSessionId) {
+                            const aiDiv = document.getElementById('streaming-response');
+                            if (aiDiv) aiDiv.innerHTML = '<span style="color:#ef4444;">⚠️ '+escapeHtml(data.text)+'</span>';
+                        }
                     }
                 } catch {}
             }
-            buffer = lines[lines.length - 1];
-            messages.scrollTop = messages.scrollHeight;
+            buffer = lines[lines.length-1];
         }
-        // 移除打字光标
-        aiDiv.classList.remove('typing-cursor');
-    } catch (err) {
-        if (err.name === 'AbortError') {
-            // 用户主动中断——stopStream() 已经处理了按钮和显示，这里不再重复
-        } else {
-            aiDiv.innerHTML = '<span class="text-red-500">⚠️ 连接失败: ' + escapeHtml(err.message) + '</span>';
-            resetSendButton();
+        // 流正常结束
+        const aiDiv = document.getElementById('streaming-response');
+        if (aiDiv) aiDiv.classList.remove('typing-cursor');
+    } catch(err) {
+        if (err.name !== 'AbortError') {
+            const aiDiv = document.getElementById('streaming-response');
+            if (aiDiv) aiDiv.innerHTML = '<span style="color:#ef4444;">⚠️ 连接失败: '+escapeHtml(err.message)+'</span>';
         }
     }
-
     htmx.trigger('#session-list', 'sessionChanged');
     resetSendButton();
     input.focus();
 }
 
-// === 中断输出 ===
-function stopStream() {
-    if (streamAbortController) {
-        streamAbortController.abort();
-        streamAbortController = null;
+// 在当前视图中渲染或恢复流式 UI
+function renderStreamingUI(question) {
+    const messages = document.getElementById('chat-messages');
+    document.getElementById('chat-welcome')?.remove();
+    // 移除旧的流式占位（如果有）
+    const old = document.getElementById('streaming-response');
+    if (old) old.remove();
+    const userDiv = document.createElement('div');
+    userDiv.className = 'message-user';
+    userDiv.textContent = question || streamQuestion || '(发送中...)';
+    messages.appendChild(userDiv);
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'message-assistant typing-cursor';
+    aiDiv.id = 'streaming-response';
+    if (streamFullAnswer) {
+        aiDiv.innerHTML = escapeHtml(streamFullAnswer).replace(/\n/g,'<br>') + '<span class="typing-cursor"></span>';
     }
-    // 立即恢复按钮状态
+    messages.appendChild(aiDiv);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function updateStreamingDOM() {
+    const aiDiv = document.getElementById('streaming-response');
+    if (!aiDiv) return;
+    let html = escapeHtml(streamFullAnswer).replace(/\n/g,'<br>');
+    if (streamReferences?.length) {
+        html += '<details class="references-box"><summary class="cursor-pointer">📚 引用来源（'+streamReferences.length+' 条）</summary>';
+        streamReferences.forEach((r,i) => {
+            html += '<div style="font-size:0.78rem;margin-top:4px;"><span style="font-weight:600;">['+(i+1)+'] '+escapeHtml(r.source)+'</span> <span style="color:#a8a29e;">(相似度:'+r.score+')</span><p style="color:#78716c;">'+escapeHtml(r.content)+'...</p></div>';
+        });
+        html += '</details>';
+    }
+    aiDiv.innerHTML = html + '<span class="typing-cursor"></span>';
+    // 仅当用户在底部时才自动滚动
+    const mc = document.getElementById('chat-messages');
+    if (mc.scrollHeight - mc.scrollTop - mc.clientHeight < 80) {
+        mc.scrollTop = mc.scrollHeight;
+    }
+}
+
+function stopStream() {
+    if (streamAbortController) { streamAbortController.abort(); streamAbortController=null; }
     resetSendButton();
     const aiDiv = document.getElementById('streaming-response');
-    if (aiDiv) {
-        aiDiv.classList.remove('typing-cursor');
-        if (aiDiv.textContent.trim() === '') {
-            aiDiv.innerHTML = '<span class="text-gray-400">⏹ 已中断</span>';
-        }
+    if (aiDiv) { aiDiv.classList.remove('typing-cursor'); aiDiv.removeAttribute('id'); if (aiDiv.textContent.trim()==='') aiDiv.innerHTML='<span style="color:#a8a29e;">⏹ 已中断</span>'; }
+}
+
+function resetSendButton() { isStreaming=false; streamingSessionId=0; streamAbortController=null; streamQuestion=''; updateStopButton(); }
+function escapeHtml(t) { const d=document.createElement('div');d.textContent=t;return d.innerHTML; }
+
+function updateStopButton() {
+    // 仅在当前页面是流式会话时才显示中断按钮
+    if (isStreaming && activeSessionId === streamingSessionId) {
+        document.getElementById('send-btn').style.display = 'none';
+        document.getElementById('stop-btn').style.display = 'inline-flex';
+    } else {
+        document.getElementById('send-btn').style.display = 'inline-flex';
+        document.getElementById('stop-btn').style.display = 'none';
     }
 }
 
-function resetSendButton() {
-    isStreaming = false;
-    streamAbortController = null;
-    document.getElementById('send-btn').style.display = 'inline-block';
-    document.getElementById('stop-btn').style.display = 'none';
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// === 会话管理 ===
+// === 会话切换（不再中断流） ===
 async function switchSession(sid, el) {
+    if (activeSessionId === sid) return;
     activeSessionId = sid;
     document.getElementById('current-session-id').value = sid;
-    document.querySelectorAll('.session-item').forEach(i => i.classList.remove('bg-indigo-50', 'text-indigo-700'));
-    if (el) {
-        el.classList.add('bg-indigo-50', 'text-indigo-700');
+    document.querySelectorAll('.session-item').forEach(i=>i.classList.remove('active'));
+    if (el) el.classList.add('active');
+    updateStopButton();
+
+    // 如果正在流式输出且切换到的就是流式会话，恢复 UI
+    if (isStreaming && streamingSessionId === sid) {
+        document.getElementById('chat-messages').innerHTML = '';
+        renderStreamingUI(null);
+        return;
     }
-    const resp = await fetch(`/chat/messages/${sid}`);
-    const html = await resp.text();
-    document.getElementById('chat-messages').innerHTML = html || '<div class="text-center text-gray-400 mt-20"><p class="text-5xl mb-4">💪</p><p class="text-lg font-medium text-gray-500">开始新对话</p></div>';
+
+    // 否则从服务器加载历史
+    const r = await fetch('/chat/messages/' + sid);
+    const h = await r.text();
+    document.getElementById('chat-messages').innerHTML = h || '<div style="text-align:center;padding-top:80px;"><p style="font-size:3rem;">💪</p><p style="font-weight:600;color:#44403c;">开始新对话</p></div>';
 }
 
 async function newSession() {
-    const formData = new FormData();
-    formData.append('title', '新对话');
-    const resp = await fetch('/chat/session/new', { method: 'POST', body: formData });
-    const data = await resp.json();
-    activeSessionId = data.session_id;
-    document.getElementById('current-session-id').value = data.session_id;
-    document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><p class="text-5xl mb-4">💪</p><p class="text-lg font-medium text-gray-500">开始新对话</p></div>';
+    const fd = new FormData(); fd.append('title', '新对话');
+    const r = await fetch('/chat/session/new', {method:'POST',body:fd}); const d = await r.json();
+    activeSessionId = d.session_id;
+    document.getElementById('current-session-id').value = d.session_id;
+    document.getElementById('chat-messages').innerHTML = '<div style="text-align:center;padding-top:80px;"><p style="font-size:3rem;">💪</p><p style="font-weight:600;color:#44403c;">开始新对话</p></div>';
+    updateStopButton();
     htmx.trigger('#session-list', 'sessionChanged');
 }
 
 async function deleteSession(sid) {
-    if (!confirm('确定删除这个会话？')) return;
-    const formData = new FormData();
-    formData.append('session_id', sid);
-    await fetch('/chat/session/delete', { method: 'DELETE', body: formData });
+    if (!confirm('确定删除？')) return;
+    if (isStreaming && streamingSessionId === sid) stopStream();
+    const fd = new FormData(); fd.append('session_id', sid);
+    await fetch('/chat/session/delete', {method:'DELETE',body:fd});
     if (activeSessionId === sid) {
         activeSessionId = 0;
         document.getElementById('current-session-id').value = '0';
-        document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><p class="text-5xl mb-4">💪</p><p class="text-lg font-medium text-gray-500">选择或创建一个会话开始对话</p></div>';
+        document.getElementById('chat-messages').innerHTML = '<div style="text-align:center;padding-top:80px;"><p style="font-size:3rem;">💪</p><p style="font-weight:600;color:#44403c;">选择一个会话开始对话</p></div>';
     }
     htmx.trigger('#session-list', 'sessionChanged');
 }

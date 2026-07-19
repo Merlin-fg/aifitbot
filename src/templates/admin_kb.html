@@ -1,43 +1,23 @@
 {% extends "base.html" %}
 {% block title %}知识库管理 - AIFitBot{% endblock %}
-
 {% block content %}
-<div class="flex gap-6">
-    <!-- 左侧：上传区 -->
-    <div class="w-80 flex-shrink-0">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sticky top-6">
-            <h2 class="font-semibold text-gray-700 mb-4">📤 上传文档</h2>
-            <form id="upload-form"
-                  hx-encoding="multipart/form-data"
-                  hx-post="/api/admin/kb/upload"
-                  hx-target="#upload-status"
-                  hx-swap="innerHTML">
-                <div class="mb-3">
-                    <label class="block text-sm text-gray-500 mb-1">选择文件</label>
-                    <input type="file" name="file" required
-                           accept=".md,.pdf,.txt"
-                           class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
-                </div>
-                <p class="text-xs text-gray-400 mb-3">支持 .md / .pdf / .txt，最大 20MB</p>
-                <button type="submit"
-                        class="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
-                    上传并处理
-                </button>
-            </form>
-            <div id="upload-status" class="mt-3 text-sm"></div>
-        </div>
+<h1 style="font-size:1.5rem;font-weight:700;margin-bottom:20px;">📚 知识库管理</h1>
+
+<div style="display:flex;gap:20px;">
+    <div class="card" style="width:300px;flex-shrink:0;padding:20px;position:sticky;top:76px;align-self:flex-start;">
+        <h2 style="font-weight:600;font-size:0.95rem;margin-bottom:16px;">📤 上传文档</h2>
+        <form hx-encoding="multipart/form-data" hx-post="/api/admin/kb/upload" hx-target="#upload-status" hx-swap="innerHTML">
+            <input type="file" name="file" required accept=".md,.pdf,.txt" class="input" style="margin-bottom:10px;">
+            <p style="font-size:0.75rem;color:#a8a29e;margin-bottom:12px;">支持 .md / .pdf / .txt，最大 20MB</p>
+            <button type="submit" class="btn btn-primary" style="width:100%;">上传并处理</button>
+        </form>
+        <div id="upload-status" style="font-size:0.85rem;margin-top:12px;"></div>
     </div>
 
-    <!-- 右侧：文档列表 -->
-    <div class="flex-1">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <h2 class="font-semibold text-gray-700 mb-4">📚 已有文档</h2>
-            <div id="doc-list"
-                 hx-get="/api/admin/kb/documents"
-                 hx-trigger="load, every 5s"
-                 hx-swap="innerHTML">
-                <p class="text-gray-400 text-sm">加载中...</p>
-            </div>
+    <div class="card" style="flex:1;padding:20px;">
+        <h2 style="font-weight:600;font-size:0.95rem;margin-bottom:16px;">📋 已有文档</h2>
+        <div id="doc-list" hx-get="/api/admin/kb/documents" hx-trigger="load, every 10s" hx-swap="innerHTML">
+            <p style="color:#a8a29e;font-size:0.85rem;">加载中...</p>
         </div>
     </div>
 </div>

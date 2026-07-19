@@ -1,56 +1,35 @@
 {% if docs %}
-<table class="w-full text-sm">
+<table class="table">
     <thead>
-        <tr class="border-b border-gray-100 text-left text-gray-500">
-            <th class="pb-2 font-medium">文件名</th>
-            <th class="pb-2 font-medium">类型</th>
-            <th class="pb-2 font-medium">大小</th>
-            <th class="pb-2 font-medium">块数</th>
-            <th class="pb-2 font-medium">状态</th>
-            <th class="pb-2 font-medium">上传时间</th>
-            <th class="pb-2 font-medium">操作</th>
-        </tr>
+        <tr><th>文件名</th><th>类型</th><th>大小</th><th>块数</th><th>状态</th><th>时间</th><th>操作</th></tr>
     </thead>
     <tbody>
         {% for doc in docs %}
-        <tr class="border-b border-gray-50 hover:bg-gray-50" id="row-{{ doc.id }}">
-            <td class="py-2 pr-3 text-gray-800 max-w-48 truncate" title="{{ doc.filename }}">{{ doc.filename }}</td>
-            <td class="py-2 pr-3">
-                <span class="px-1.5 py-0.5 rounded text-xs font-mono
-                    {% if doc.file_type == 'md' %}bg-blue-100 text-blue-700
-                    {% elif doc.file_type == 'pdf' %}bg-red-100 text-red-700
-                    {% else %}bg-gray-100 text-gray-700{% endif %}">
-                    {{ doc.file_type }}
-                </span>
+        <tr id="row-{{ doc.id }}">
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ doc.filename }}">{{ doc.filename }}</td>
+            <td>
+                <span style="font-size:0.7rem;padding:2px 8px;border-radius:10px;{% if doc.file_type=='md' %}background:#dbeafe;color:#1d4ed8;{% elif doc.file_type=='pdf' %}background:#fee2e2;color:#b91c1c;{% else %}background:#f5f5f4;color:#44403c;{% endif %}">{{ doc.file_type }}</span>
             </td>
-            <td class="py-2 pr-3 text-gray-500">{{ "%.1f"|format(doc.size_bytes / 1024) }} KB</td>
-            <td class="py-2 pr-3 text-gray-500">{{ doc.chunk_count }}</td>
-            <td class="py-2 pr-3">
-                {% if doc.status == 'ready' %}
-                <span class="text-green-600 text-xs">✅ 就绪</span>
-                {% elif doc.status == 'processing' %}
-                <span class="text-yellow-600 text-xs">⏳ 处理中</span>
-                {% else %}
-                <span class="text-red-600 text-xs" title="{{ doc.error_msg }}">❌ 失败</span>
+            <td style="color:#78716c;">{{ "%.1f"|format(doc.size_bytes/1024) }} KB</td>
+            <td style="color:#78716c;">{{ doc.chunk_count }}</td>
+            <td>
+                {% if doc.status=='ready' %}<span style="color:#059669;font-size:0.8rem;">✅ 就绪</span>
+                {% elif doc.status=='processing' %}<span style="color:#d97706;font-size:0.8rem;">⏳ 处理中</span>
+                {% else %}<span style="color:#ef4444;font-size:0.8rem;" title="{{ doc.error_msg }}">❌ 失败</span>
                 {% endif %}
             </td>
-            <td class="py-2 pr-3 text-gray-400 text-xs">{{ doc.created_at.strftime('%m-%d %H:%M') }}</td>
-            <td class="py-2">
-                <button class="text-red-400 hover:text-red-600 text-xs"
+            <td style="color:#a8a29e;font-size:0.8rem;">{{ doc.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td>
+                <button style="color:#ef4444;font-size:0.8rem;border:none;background:none;cursor:pointer;"
                         hx-delete="/api/admin/kb/documents/{{ doc.id }}"
-                        hx-confirm="确定删除「{{ doc.filename }}」？"
-                        hx-target="#row-{{ doc.id }}"
-                        hx-swap="outerHTML">
-                    删除
-                </button>
+                        hx-confirm="确定删除？" hx-target="#row-{{ doc.id }}" hx-swap="outerHTML">删除</button>
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 {% else %}
-<div class="text-center py-12 text-gray-400">
-    <p class="text-3xl mb-2">📭</p>
-    <p>知识库为空，请上传文档</p>
+<div style="text-align:center;padding:40px;color:#a8a29e;">
+    <p style="font-size:2rem;margin-bottom:8px;">📭</p><p>知识库为空，请上传文档</p>
 </div>
 {% endif %}
