@@ -1,6 +1,6 @@
 {% if sessions %}{% for sess in sessions %}
 <div class="session-item" data-session-id="{{ sess.id }}" onclick="switchSession({{ sess.id }}, this)">
-    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ sess.title }}</span>
-    <button class="btn btn-ghost" style="padding:2px 6px;font-size:.7rem;display:none;" onclick="event.stopPropagation();deleteSession({{ sess.id }})" title="删除">🗑</button>
-</div>{% endfor %}<style>.session-item:hover button{display:inline-flex!important;}</style>
-{% else %}<p style="text-align:center;color:#9ca3af;font-size:.8rem;padding:24px 0;">暂无会话</p>{% endif %}
+    <span class="session-title">{{ sess.title }}</span>
+    <button class="session-del" onclick="event.stopPropagation();deleteSession({{ sess.id }})" title="删除">×</button>
+</div>{% endfor %}
+{% else %}<p style="text-align:center;color:var(--color-text-tertiary);font-size:var(--text-sm);padding:var(--space-8) 0;">暂无会话</p>{% endif %}

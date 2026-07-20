@@ -1,40 +1,49 @@
 {% extends "base.html" %}
 {% block title %}AIFitBot — AI 私人健身教练{% endblock %}
 {% block content %}
-<div class="hero">
+<div class="hero-wrap">
     <div class="hero-icon">💪</div>
     <h1>你的 <em>AI 私人健身教练</em></h1>
-    <p>基于专业知识库的智能问答助手——训练计划、营养饮食、动作要领，有据可查</p>
+    <p>基于专业知识库的智能问答助手，训练计划、营养饮食、动作要领，有据可查</p>
     {% if user %}
-        <a href="/chat" class="btn btn-primary btn-lg">开始对话</a>
+        <div class="hero-actions">
+            <a href="/chat" class="btn btn-primary btn-lg btn-pill">开始对话</a>
+        </div>
     {% else %}
-        <div style="display:flex;justify-content:center;gap:12px;">
-            <a href="/auth/login" class="btn btn-primary btn-lg">登录</a>
-            <a href="/auth/register" class="btn btn-outline btn-lg">注册</a>
+        <div class="hero-actions">
+            <a href="/auth/login" class="btn btn-primary btn-lg btn-pill">登录</a>
+            <a href="/auth/register" class="btn btn-outline btn-lg btn-pill">注册</a>
         </div>
     {% endif %}
+    <div class="hero-stats">
+        <div class="hs-item"><div class="hs-num">500+</div><div class="hs-label">知识条目</div></div>
+        <div class="hs-item"><div class="hs-num">24/7</div><div class="hs-label">随时可用</div></div>
+        <div class="hs-item"><div class="hs-num">RAG</div><div class="hs-label">溯源回答</div></div>
+    </div>
 </div>
 
-<div class="feature-grid">
-    <div class="card feature-card">
-        <div class="icon">🏋️</div>
-        <h3>专业训练指导</h3>
-        <p>基于运动科学知识库，提供标准动作要领、训练计划、易错纠正</p>
-    </div>
-    <div class="card feature-card">
-        <div class="icon">🍎</div>
-        <h3>营养饮食规划</h3>
-        <p>增肌减脂饮食方案、热量计算、微量元素补充建议</p>
-    </div>
-    <div class="card feature-card">
-        <div class="icon">📚</div>
-        <h3>知识库溯源</h3>
-        <p>每条回答标注引用来源，言之有据，告别 AI 幻觉</p>
-    </div>
-    <div class="card feature-card">
-        <div class="icon">⚡</div>
-        <h3>流式多轮对话</h3>
-        <p>打字机效果实时输出，多会话管理，上下文连贯记忆</p>
+<div class="feature-section">
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="fc-icon-wrap c1">🏋️</div>
+            <h3>专业训练指导</h3>
+            <p>基于运动科学知识库，提供标准动作要领、训练计划设计、常见错误纠正</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon-wrap c2">🍎</div>
+            <h3>营养饮食规划</h3>
+            <p>增肌减脂饮食方案、热量计算、微量元素补充建议</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon-wrap c3">📚</div>
+            <h3>知识库溯源</h3>
+            <p>每条回答标注引用来源，言之有据，告别 AI 幻觉</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon-wrap c4">⚡</div>
+            <h3>流式多轮对话</h3>
+            <p>打字机效果实时输出，多会话管理，上下文连贯记忆</p>
+        </div>
     </div>
 </div>
 {% endblock %}

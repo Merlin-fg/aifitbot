@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 {% block title %}知识库管理 — AIFitBot{% endblock %}
 {% block content %}
-<h1 class="page-title">📚 知识库管理</h1>
+<h1 class="page-title">知识库管理</h1>
 
-<div style="display:flex;gap:20px;">
-    <div class="card" style="width:300px;flex-shrink:0;padding:22px;position:sticky;top:84px;align-self:flex-start;">
-        <h2 style="font-weight:700;font-size:.92rem;margin-bottom:16px;">📤 上传文档</h2>
+<div class="kb-layout">
+    <div class="card kb-upload">
+        <h2>上传文档</h2>
         <form hx-encoding="multipart/form-data" hx-post="/api/admin/kb/upload" hx-target="#upload-status" hx-swap="innerHTML">
-            <input type="file" name="file" required accept=".md,.pdf,.txt" class="input" style="margin-bottom:10px;">
-            <p style="font-size:.75rem;color:#9ca3af;margin-bottom:14px;">支持 .md / .pdf / .txt，最大 20MB</p>
+            <input type="file" name="file" required accept=".md,.pdf,.txt" class="input" style="margin-bottom:var(--space-3);">
+            <p style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-bottom:var(--space-4);">支持 .md / .pdf / .txt，最大 20MB</p>
             <button type="submit" class="btn btn-primary" style="width:100%;">上传并处理</button>
         </form>
-        <div id="upload-status" style="font-size:.85rem;margin-top:12px;"></div>
+        <div id="upload-status" style="font-size:var(--text-sm);margin-top:var(--space-3);"></div>
     </div>
 
-    <div class="card" style="flex:1;padding:22px;">
-        <h2 style="font-weight:700;font-size:.92rem;margin-bottom:16px;">📋 已有文档</h2>
+    <div class="card kb-list">
+        <h2>已有文档</h2>
         <div id="doc-list" hx-get="/api/admin/kb/documents" hx-trigger="load, every 10s" hx-swap="innerHTML">
-            <p style="color:#9ca3af;font-size:.85rem;">加载中...</p>
+            <p style="color:var(--color-text-tertiary);font-size:var(--text-sm);">加载中...</p>
         </div>
     </div>
 </div>

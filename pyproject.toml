@@ -26,6 +26,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "aiofiles>=24.0.0",
     "streamlit>=1.28.0",
+    "rank-bm25>=0.2.2",
 ]
 
 [dependency-groups]

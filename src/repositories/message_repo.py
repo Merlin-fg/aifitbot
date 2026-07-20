@@ -22,14 +22,17 @@ class MessageRepository:
         self.session.refresh(msg)
         return msg
 
-    def get_by_session(self, session_id: int) -> list[Message]:
-        """获取某个会话的所有消息（按时间正序）。"""
+    def get_by_session(self, session_id: int, limit: Optional[int] = None) -> list[Message]:
+        """获取某个会话的消息（按时间正序）。可限制最近 N 条。"""
         statement = (
             select(Message)
             .where(Message.session_id == session_id)
-            .order_by(Message.created_at.asc())
+            .order_by(Message.created_at.desc() if limit else Message.created_at.asc())
         )
-        return list(self.session.exec(statement).all())
+        results = list(self.session.exec(statement).all())
+        if limit:
+            results = list(reversed(results[:limit]))  # 取最近 N 条，再翻回正序
+        return results
 
     def delete_by_session(self, session_id: int):
         """删除某会话的所有消息。"""

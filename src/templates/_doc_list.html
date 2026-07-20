@@ -3,10 +3,10 @@
 <tbody>{% for doc in docs %}<tr id="row-{{ doc.id }}">
     <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;" title="{{ doc.filename }}">{{ doc.filename }}</td>
     <td><span class="tag {% if doc.file_type=='md' %}tag-blue{% elif doc.file_type=='pdf' %}tag-red{% else %}tag-gray{% endif %}">{{ doc.file_type }}</span></td>
-    <td style="color:#6b7280;">{{ "%.1f"|format(doc.size_bytes/1024) }} KB</td>
-    <td style="color:#6b7280;">{{ doc.chunk_count }}</td>
-    <td>{% if doc.status=='ready' %}<span class="tag tag-green">✅ 就绪</span>{% elif doc.status=='processing' %}<span class="tag tag-yellow">⏳ 处理中</span>{% else %}<span class="tag tag-red" title="{{ doc.error_msg }}">❌ 失败</span>{% endif %}</td>
-    <td style="color:#9ca3af;font-size:.8rem;">{{ doc.created_at.strftime('%m-%d %H:%M') }}</td>
-    <td><button style="color:#ef4444;font-size:.8rem;border:none;background:none;cursor:pointer;font-weight:500;" hx-delete="/api/admin/kb/documents/{{ doc.id }}" hx-confirm="确定删除？" hx-target="#row-{{ doc.id }}" hx-swap="outerHTML">删除</button></td>
+    <td style="color:var(--color-text-secondary);">{{ "%.1f"|format(doc.size_bytes/1024) }} KB</td>
+    <td style="color:var(--color-text-secondary);">{{ doc.chunk_count }}</td>
+    <td>{% if doc.status=='ready' %}<span class="tag tag-green">就绪</span>{% elif doc.status=='processing' %}<span class="tag tag-yellow">处理中</span>{% else %}<span class="tag tag-red" title="{{ doc.error_msg }}">失败</span>{% endif %}</td>
+    <td style="color:var(--color-text-tertiary);font-size:var(--text-xs);">{{ doc.created_at.strftime('%m-%d %H:%M') }}</td>
+    <td><button style="color:var(--color-error);font-size:var(--text-sm);border:none;background:none;cursor:pointer;font-weight:500;" hx-delete="/api/admin/kb/documents/{{ doc.id }}" hx-confirm="确定删除？" hx-target="#row-{{ doc.id }}" hx-swap="outerHTML">删除</button></td>
 </tr>{% endfor %}</tbody></table>
-{% else %}<div style="text-align:center;padding:40px;color:#9ca3af;"><div style="font-size:2.2rem;margin-bottom:8px;">📭</div>知识库为空，请上传文档</div>{% endif %}
+{% else %}<div style="text-align:center;padding:var(--space-10);color:var(--color-text-tertiary);"><div style="font-size:2.2rem;margin-bottom:var(--space-3);">📭</div>知识库为空，请上传文档</div>{% endif %}

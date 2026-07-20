@@ -1,5 +1,11 @@
-<div id="chat-welcome" class="text-center text-gray-400 mt-20">
-    <p class="text-5xl mb-4">💪</p>
-    <p class="text-lg font-medium text-gray-500">AIFitBot 健身教练</p>
-    <p class="text-sm mt-2">向我提问关于训练、饮食或拉伸的任何问题</p>
+<div id="chat-welcome" class="chat-welcome">
+    <div class="welcome-icon">💪</div>
+    <p class="welcome-title">AIFitBot 健身教练</p>
+    <p class="welcome-sub">向我提问关于训练、饮食或拉伸的任何问题</p>
+    <div class="quick-prompts">
+        <span class="quick-pill" onclick="document.getElementById('chat-input').value='如何制定增肌训练计划？';document.getElementById('chat-form').dispatchEvent(new Event('submit'))">🏋️ 增肌训练计划</span>
+        <span class="quick-pill" onclick="document.getElementById('chat-input').value='减脂期间应该怎么吃？';document.getElementById('chat-form').dispatchEvent(new Event('submit'))">🥗 减脂饮食建议</span>
+        <span class="quick-pill" onclick="document.getElementById('chat-input').value='硬拉的标准动作要领是什么？';document.getElementById('chat-form').dispatchEvent(new Event('submit'))">🎯 动作要领</span>
+        <span class="quick-pill" onclick="document.getElementById('chat-input').value='运动后如何拉伸放松？';document.getElementById('chat-form').dispatchEvent(new Event('submit'))">🧘 拉伸放松</span>
+    </div>
 </div>

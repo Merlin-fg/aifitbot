@@ -45,6 +45,15 @@ APP_TITLE = "AIFitBot - AI 私人健身教练"
 APP_VERSION = "0.2.1"
 
 # ============================================================
+# RAG 配置
+# ============================================================
+CHROMA_DIR = os.getenv("CHROMA_DIR", "chroma_db")
+RAG_K = int(os.getenv("RAG_K", "3"))            # 检索返回文档数
+RAG_MAX_CHUNK = int(os.getenv("RAG_MAX_CHUNK", "300"))  # 每条引用截断字数
+RAG_TOKEN_BUDGET = int(os.getenv("RAG_TOKEN_BUDGET", "4096"))  # 上下文 token 预算
+RAG_HISTORY_ROUNDS = int(os.getenv("RAG_HISTORY_ROUNDS", "6"))  # 对话历史保留轮数
+
+# ============================================================
 # 管理员默认账号（首次启动时创建）
 # ============================================================
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")

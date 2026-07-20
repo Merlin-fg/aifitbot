@@ -1,38 +1,40 @@
 {% extends "base.html" %}
 {% block title %}对话 — AIFitBot{% endblock %}
 {% block content %}
-<div style="display:flex;gap:18px;height:calc(100vh - 140px);">
-    <aside class="card" style="width:242px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;">
-        <div style="padding:18px 16px;border-bottom:1px solid #e2e8e8;display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-weight:700;font-size:.85rem;">💬 我的会话</span>
-            <button onclick="newSession()" class="btn btn-ghost" style="padding:4px 10px;font-size:1.15rem;border-radius:8px;" title="新建">+</button>
+<div class="chat-layout">
+    <!-- Sidebar -->
+    <aside class="chat-sidebar">
+        <div class="sidebar-header">
+            <h3>我的会话</h3>
+            <button onclick="newSession()" class="btn btn-ghost btn-icon" title="新建会话" style="font-size:1.2rem;">+</button>
         </div>
-        <div id="session-list" style="flex:1;overflow-y:auto;padding:10px 8px;"
+        <div id="session-list" class="sidebar-list"
              hx-get="/chat/session/list" hx-trigger="load, sessionChanged from:body" hx-swap="innerHTML">
-            <p style="text-align:center;color:#9ca3af;font-size:.8rem;padding:24px 0;">加载中...</p>
+            <p style="text-align:center;color:var(--color-text-tertiary);font-size:var(--text-sm);padding:var(--space-8) 0;">加载中...</p>
         </div>
-        <div style="padding:12px 16px;border-top:1px solid #e2e8e8;font-size:.75rem;display:flex;justify-content:center;gap:12px;">
-            <a href="/auth/password" style="color:#9ca3af;text-decoration:none;">⚙️ 改密</a>
-            {% if user.role.value == 'admin' %}<a href="/admin/kb" style="color:#9ca3af;text-decoration:none;">📚 知识库</a>{% endif %}
+        <div class="sidebar-footer">
+            <a href="/auth/password">改密</a>
+            {% if user.role.value == 'admin' %}<a href="/admin/kb">知识库</a>{% endif %}
         </div>
     </aside>
 
-    <div class="card" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
-        <div id="chat-messages" class="chat-container" style="flex:1;overflow-y:auto;">
-            <div id="chat-welcome" style="text-align:center;padding-top:60px;">
-                <div style="font-size:3.5rem;margin-bottom:10px;animation:float 3s ease-in-out infinite;">💪</div>
-                <p style="font-size:1.05rem;font-weight:700;">AIFitBot 健身教练</p>
-                <p style="font-size:.85rem;color:#9ca3af;margin-top:4px;">向我提问关于训练、饮食或拉伸的任何问题</p>
+    <!-- Main chat -->
+    <div class="chat-main">
+        <div id="chat-messages" class="chat-messages">
+            <div id="chat-welcome" class="chat-welcome">
+                <div class="welcome-icon">💪</div>
+                <p class="welcome-title">AIFitBot 健身教练</p>
+                <p class="welcome-sub">向我提问关于训练、饮食或拉伸的任何问题</p>
             </div>
         </div>
 
-        <div style="padding:14px 18px;border-top:1px solid #e5e5e5;background:#fafafa;">
+        <div class="chat-input-area">
             <form id="chat-form" onsubmit="handleStreamSubmit(event)" style="margin:0;">
                 <input type="hidden" name="session_id" id="current-session-id" value="0">
-                <div style="display:flex;gap:10px;">
-                    <input type="text" id="chat-input" name="question" class="input" style="flex:1;" placeholder="输入你的健身问题..." autofocus>
+                <div class="chat-input-row">
+                    <input type="text" id="chat-input" name="question" class="input" placeholder="输入你的健身问题..." autofocus>
                     <button type="submit" id="send-btn" class="btn btn-primary" style="padding:10px 22px;">发送</button>
-                    <button type="button" id="stop-btn" onclick="stopStream()" class="btn btn-danger" style="padding:10px 18px;display:none;">⏹ 中断</button>
+                    <button type="button" id="stop-btn" onclick="stopStream()" class="btn btn-danger" style="padding:10px 18px;display:none;">中断</button>
                 </div>
             </form>
         </div>
@@ -69,13 +71,13 @@ async function handleStreamSubmit(e){
                     if(data.type==='session'){streamingSessionId=data.session_id;if(activeSessionId===0){activeSessionId=data.session_id;document.getElementById('current-session-id').value=data.session_id;}}
                     else if(data.type==='token'){streamFullAnswer+=data.text;if(activeSessionId===streamingSessionId)updateStreamingDOM();}
                     else if(data.type==='references'){streamReferences=data.refs;if(activeSessionId===streamingSessionId)updateStreamingDOM();}
-                    else if(data.type==='error'){if(activeSessionId===streamingSessionId){const a=document.getElementById('streaming-response');if(a)a.innerHTML='<span style="color:#ef4444;">⚠️ '+escapeHtml(data.text)+'</span>';}}
+                    else if(data.type==='error'){if(activeSessionId===streamingSessionId){const a=document.getElementById('streaming-response');if(a)a.innerHTML='<span style="color:var(--color-error);">'+escapeHtml(data.text)+'</span>';}}
                 }catch{}
             }
             buffer=lines[lines.length-1];
         }
         const aiDiv=document.getElementById('streaming-response');if(aiDiv)aiDiv.classList.remove('typing-cursor');
-    }catch(err){if(err.name!=='AbortError'){const a=document.getElementById('streaming-response');if(a)a.innerHTML='<span style="color:#ef4444;">⚠️ 连接失败</span>';}}
+    }catch(err){if(err.name!=='AbortError'){const a=document.getElementById('streaming-response');if(a)a.innerHTML='<span style="color:var(--color-error);">连接失败</span>';}}
     htmx.trigger('#session-list','sessionChanged');resetSendButton();input.focus();
 }
 
@@ -92,12 +94,12 @@ function renderStreamingUI(question,skipUserMsg){
 function updateStreamingDOM(){
     const ai=document.getElementById('streaming-response');if(!ai)return;
     let h=escapeHtml(streamFullAnswer).replace(/\n/g,'<br>');
-    if(streamReferences?.length){h+='<details class="references-box"><summary class="cursor-pointer">📚 引用来源（'+streamReferences.length+' 条）</summary>';streamReferences.forEach((r,i)=>{h+='<div style="font-size:.78rem;margin-top:4px;"><span style="font-weight:600;">['+(i+1)+'] '+escapeHtml(r.source)+'</span> <span style="color:#a8a29e;">(相似度:'+r.score+')</span><p style="color:#78716c;">'+escapeHtml(r.content)+'...</p></div>';});h+='</details>';}
+    if(streamReferences?.length){h+='<details class="references-box"><summary>引用来源（'+streamReferences.length+' 条）</summary>';streamReferences.forEach((r,i)=>{h+='<div style="font-size:.78rem;margin-top:4px;"><span style="font-weight:600;">['+(i+1)+'] '+escapeHtml(r.source)+'</span> <span style="color:var(--color-text-tertiary);">(相似度:'+r.score+')</span><p style="color:var(--color-text-secondary);">'+escapeHtml(r.content)+'...</p></div>';});h+='</details>';}
     ai.innerHTML=h+'<span class="typing-cursor"></span>';
     const mc=document.getElementById('chat-messages');if(mc.scrollHeight-mc.scrollTop-mc.clientHeight<80)mc.scrollTop=mc.scrollHeight;
 }
 
-function stopStream(){if(streamAbortController){streamAbortController.abort();streamAbortController=null;}resetSendButton();const a=document.getElementById('streaming-response');if(a){a.classList.remove('typing-cursor');a.removeAttribute('id');if(a.textContent.trim()==='')a.innerHTML='<span style="color:#9ca3af;">⏹ 已中断</span>';}}
+function stopStream(){if(streamAbortController){streamAbortController.abort();streamAbortController=null;}resetSendButton();const a=document.getElementById('streaming-response');if(a){a.classList.remove('typing-cursor');a.removeAttribute('id');if(a.textContent.trim()==='')a.innerHTML='<span style="color:var(--color-text-tertiary);">已中断</span>';}}
 function resetSendButton(){isStreaming=false;streamingSessionId=0;streamAbortController=null;streamQuestion='';updateStopButton();}
 function updateStopButton(){if(isStreaming&&activeSessionId===streamingSessionId){document.getElementById('send-btn').style.display='none';document.getElementById('stop-btn').style.display='inline-flex';}else{document.getElementById('send-btn').style.display='inline-flex';document.getElementById('stop-btn').style.display='none';}}
 function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
@@ -109,14 +111,14 @@ async function switchSession(sid,el){
     if(el)el.classList.add('active');
     updateStopButton();
     const r=await fetch('/chat/messages/'+sid);const h=await r.text();
-    document.getElementById('chat-messages').innerHTML=h||'<div style="text-align:center;padding-top:60px;"><div style="font-size:3.5rem;">💪</div><p style="font-weight:700;">开始新对话</p></div>';
+    document.getElementById('chat-messages').innerHTML=h||'<div class="chat-welcome"><div class="welcome-icon">💪</div><p class="welcome-title">开始新对话</p></div>';
     if(isStreaming&&streamingSessionId===sid)renderStreamingUI(null,true);
 }
 async function newSession(){
     const fd=new FormData();fd.append('title','新对话');
     const r=await fetch('/chat/session/new',{method:'POST',body:fd});const d=await r.json();
     activeSessionId=d.session_id;document.getElementById('current-session-id').value=d.session_id;
-    document.getElementById('chat-messages').innerHTML='<div style="text-align:center;padding-top:60px;"><div style="font-size:3.5rem;">💪</div><p style="font-weight:700;">开始新对话</p></div>';
+    document.getElementById('chat-messages').innerHTML='<div class="chat-welcome"><div class="welcome-icon">💪</div><p class="welcome-title">开始新对话</p></div>';
     updateStopButton();htmx.trigger('#session-list','sessionChanged');
 }
 async function deleteSession(sid){
@@ -124,7 +126,7 @@ async function deleteSession(sid){
     if(isStreaming&&streamingSessionId===sid)stopStream();
     const fd=new FormData();fd.append('session_id',sid);
     await fetch('/chat/session/delete',{method:'DELETE',body:fd});
-    if(activeSessionId===sid){activeSessionId=0;document.getElementById('current-session-id').value='0';document.getElementById('chat-messages').innerHTML='<div style="text-align:center;padding-top:60px;"><div style="font-size:3.5rem;">💪</div><p style="font-weight:700;">选择一个会话开始对话</p></div>';}
+    if(activeSessionId===sid){activeSessionId=0;document.getElementById('current-session-id').value='0';document.getElementById('chat-messages').innerHTML='<div class="chat-welcome"><div class="welcome-icon">💪</div><p class="welcome-title">选择一个会话开始对话</p></div>';}
     htmx.trigger('#session-list','sessionChanged');
 }
 </script>

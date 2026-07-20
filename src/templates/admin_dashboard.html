@@ -3,44 +3,44 @@
 {% block content %}
 <h1 class="page-title">📊 管理仪表盘</h1>
 
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;">
-    <div class="card stat-card">
+<div class="stat-grid">
+    <div class="card stat-card s1">
         <div class="stat-icon">👥</div>
-        <div class="stat-value" style="color:#059669;">{{ stats.user_count }}</div>
+        <div class="stat-value">{{ stats.user_count }}</div>
         <div class="stat-label">注册用户</div>
     </div>
-    <div class="card stat-card">
+    <div class="card stat-card s2">
         <div class="stat-icon">📄</div>
-        <div class="stat-value" style="color:#0284c7;">{{ stats.doc_count }}</div>
+        <div class="stat-value">{{ stats.doc_count }}</div>
         <div class="stat-label">知识库文档</div>
     </div>
-    <div class="card stat-card">
+    <div class="card stat-card s3">
         <div class="stat-icon">💬</div>
-        <div class="stat-value" style="color:#d97706;">{{ stats.session_count }}</div>
+        <div class="stat-value">{{ stats.session_count }}</div>
         <div class="stat-label">对话会话</div>
     </div>
-    <div class="card stat-card">
+    <div class="card stat-card s4">
         <div class="stat-icon">📝</div>
-        <div class="stat-value" style="color:#7c3aed;">{{ stats.message_count }}</div>
+        <div class="stat-value">{{ stats.message_count }}</div>
         <div class="stat-label">消息总数</div>
     </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-    <div class="card" style="padding:22px;">
-        <h2 style="font-weight:700;font-size:.95rem;margin-bottom:14px;">👥 最近注册用户</h2>
+<div class="admin-grid">
+    <div class="card admin-panel">
+        <h2>👥 最近注册用户</h2>
         {% if recent_users %}
         <table class="table"><thead><tr><th>用户名</th><th>角色</th><th>注册时间</th></tr></thead>
         <tbody>{% for u in recent_users %}<tr>
             <td style="font-weight:500;">{{ u.username }}</td>
             <td><span class="tag {% if u.role.value=='admin' %}tag-purple{% else %}tag-gray{% endif %}">{{ u.role.value }}</span></td>
-            <td style="color:#9ca3af;">{{ u.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td style="color:var(--c-text3);">{{ u.created_at.strftime('%m-%d %H:%M') }}</td>
         </tr>{% endfor %}</tbody></table>
-        {% else %}<p style="color:#9ca3af;font-size:.85rem;">暂无数据</p>{% endif %}
+        {% else %}<p style="color:var(--c-text3);font-size:var(--t-sm);">暂无数据</p>{% endif %}
     </div>
-    <div class="card" style="padding:22px;">
-        <h2 style="font-weight:700;font-size:.95rem;margin-bottom:14px;">🔗 快速入口</h2>
-        <div style="display:flex;flex-direction:column;gap:10px;">
+    <div class="card admin-panel">
+        <h2>🔗 快速入口</h2>
+        <div style="display:flex;flex-direction:column;gap:var(--s-3);">
             <a href="/admin/kb" class="btn btn-outline" style="justify-content:flex-start;">📚 知识库管理</a>
             <a href="/chat" class="btn btn-outline" style="justify-content:flex-start;">💬 进入对话</a>
         </div>

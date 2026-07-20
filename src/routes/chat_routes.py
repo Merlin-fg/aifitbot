@@ -4,11 +4,13 @@ import json
 import html
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
 
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session as DbSession
+from langchain_core.messages import HumanMessage, AIMessage
 
 from src.database import engine, get_session
 from src.middleware.auth_middleware import get_current_user
@@ -167,16 +169,17 @@ async def chat_send(
     msg_repo.create(session_id, "user", question)
 
     # ⚠️ 以下"会话获取→消息保存→历史加载"逻辑与 chat_stream 重复，修改时需同步两处
-    # 加载历史构建多轮对话上下文
-    history_msgs = msg_repo.get_by_session(session_id)
-    history_text = ""
-    for m in history_msgs[:-1]:
-        role_label = "用户" if m.role == "user" else "教练"
-        history_text += f"{role_label}：{m.content}\n"
-    full_question = f"对话历史：\n{history_text}\n用户最新问题：{question}" if history_text.strip() else question
+    # 加载历史构建对话历史（滑动窗口：最近 6 轮 = 12 条 + 当前消息 = 13 条）
+    history_msgs = msg_repo.get_by_session(session_id, limit=13)
+    chat_history: List = []
+    for m in history_msgs[:-1]:  # 排除刚保存的用户消息
+        if m.role == "user":
+            chat_history.append(HumanMessage(content=m.content))
+        else:
+            chat_history.append(AIMessage(content=m.content))
 
-    # 调用 RAG
-    result = rag.query(full_question)
+    # 调用 RAG（传入对话历史）
+    result = rag.query(question, chat_history=chat_history)
     answer = result["answer"]
     references = result["references"]
 
@@ -250,29 +253,33 @@ async def chat_stream(
     msg_repo = MessageRepository(db)
     msg_repo.create(session_id, "user", question)
 
-    # 加载当前会话的历史消息（用于多轮对话上下文）
-    history_msgs = msg_repo.get_by_session(session_id)
+    # 加载历史（滑动窗口：最近 6 轮）
+    history_msgs = msg_repo.get_by_session(session_id, limit=13)
+    chat_history: List = []
     history_text = ""
-    for m in history_msgs[:-1]:  # 排除刚保存的用户消息本身
-        role_label = "用户" if m.role == "user" else "教练"
-        history_text += f"{role_label}：{m.content}\n"
+    for m in history_msgs[:-1]:  # 排除刚保存的用户消息
+        if m.role == "user":
+            chat_history.append(HumanMessage(content=m.content))
+            history_text += f"用户：{m.content}\n"
+        else:
+            chat_history.append(AIMessage(content=m.content))
+            history_text += f"教练：{m.content}\n"
 
-    # 构建带历史的查询
-    if history_text.strip():
-        full_question = f"对话历史：\n{history_text}\n用户最新问题：{question}"
-    else:
-        full_question = question
+    # 构建带历史的查询（查询改写用完整历史文本）
+    full_question = question
+    search_query = f"对话历史：\n{history_text}\n用户最新问题：{question}" if history_text.strip() else question
 
     # 更新标题（首次对话用问题前30字作为会话标题）
     if sess.title == "新对话":
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
 
-    # 先检索（使用带历史的完整查询）
+    # 先检索（用带历史的 search_query 召回，用 question 做改写）
     try:
-        docs_with_scores = rag.vector_repo._get_store().similarity_search_with_score(full_question, k=3)
+        docs, scores, category = rag.vector_repo.search(search_query, k=3)
+        docs_with_scores = list(zip(docs, scores))
     except Exception:
-        docs_with_scores = []
+        docs, scores, docs_with_scores = [], [], []
 
     references = []
     for doc, score in docs_with_scores:
@@ -294,11 +301,12 @@ async def chat_stream(
 
     # 使用 rag 内置的 LLM（避免重复创建）
     from src.services.rag_service import SYSTEM_PROMPT
-    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
     llm = rag.llm
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
+        MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
     ])
 
@@ -311,7 +319,11 @@ async def chat_stream(
 
         try:
             chain = prompt | llm
-            async for chunk in chain.astream({"context": kb_context, "input": full_question}):
+            async for chunk in chain.astream({
+                "context": kb_context,
+                "input": question,
+                "chat_history": chat_history,
+            }):
                 token = chunk.content if hasattr(chunk, 'content') else str(chunk)
                 if token:
                     full_answer += token

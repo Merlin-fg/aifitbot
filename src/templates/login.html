@@ -3,15 +3,15 @@
 {% block content %}
 <div class="form-page">
     <div class="card form-card">
-        <h1>👋 欢迎回来</h1>
+        <h1>欢迎回来</h1>
         <form method="POST" action="/auth/login">
             <div class="form-group">
                 <label>用户名</label>
-                <input type="text" name="username" required class="input" placeholder="请输入用户名">
+                <input type="text" name="username" required class="input" placeholder="请输入用户名" autocomplete="username">
             </div>
             <div class="form-group">
                 <label>密码</label>
-                <input type="password" name="password" required class="input" placeholder="请输入密码">
+                <input type="password" name="password" required class="input" placeholder="请输入密码" autocomplete="current-password">
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;">登录</button>
         </form>

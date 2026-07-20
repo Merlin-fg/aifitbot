@@ -12,37 +12,40 @@
 <body>
     <nav class="navbar">
         <div class="navbar-inner">
-            <a href="/" class="nav-brand"><span>💪</span>AIFitBot</a>
+            <a href="/" class="nav-brand">
+                <span class="brand-icon">💪</span>
+                <span class="brand-text">AIFitBot</span>
+            </a>
             <div class="nav-links">
                 {% if user %}
                     <span class="nav-user">{{ user.username }}</span>
-                    <a href="/chat">💬 对话</a>
+                    <a href="/chat">对话</a>
                     {% if user.role.value == 'admin' %}
-                        <a href="/admin/kb">📚 知识库</a>
-                        <a href="/admin/dashboard">📊 仪表盘</a>
+                        <a href="/admin/kb">知识库</a>
+                        <a href="/admin/dashboard">仪表盘</a>
                     {% endif %}
-                    <a href="/auth/password">⚙️ 改密</a>
+                    <a href="/auth/password">改密</a>
                     <a href="/auth/logout" class="nav-logout">退出</a>
                 {% else %}
                     <a href="/auth/login">登录</a>
-                    <a href="/auth/register" class="btn btn-primary" style="padding:7px 18px;font-size:.82rem;">注册</a>
+                    <a href="/auth/register" class="nav-cta">注册</a>
                 {% endif %}
             </div>
         </div>
     </nav>
 
-    <main style="max-width:1200px;margin:0 auto;padding:28px 24px;">
+    <main>
         {% block content %}{% endblock %}
     </main>
 
     {% if msg %}
     <div x-data="{show:true}" x-show="show" x-init="setTimeout(()=>show=false,4000)" class="toast toast-success">
-        ✅ {{ msg }} <button @click="show=false" style="margin-left:10px;font-weight:700;border:none;background:none;cursor:pointer;font-size:1rem;">&times;</button>
+        {{ msg }} <button @click="show=false">&times;</button>
     </div>
     {% endif %}
     {% if error %}
     <div x-data="{show:true}" x-show="show" x-init="setTimeout(()=>show=false,5000)" class="toast toast-error">
-        ⚠️ {{ error }} <button @click="show=false" style="margin-left:10px;font-weight:700;border:none;background:none;cursor:pointer;font-size:1rem;">&times;</button>
+        {{ error }} <button @click="show=false">&times;</button>
     </div>
     {% endif %}
 </body>
