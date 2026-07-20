@@ -6,3 +6,6 @@ __pycache__/
 chroma_db/
 aifitbot.db
 data/
+
+# 门禁通行证（agent 动态生成，不提交）
+.gate/*.pass

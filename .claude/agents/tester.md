@@ -58,3 +58,15 @@ API routes     X       X      X
 ```
 
 失败项列出具体原因和修复建议。
+
+## 通行证机制
+
+测试全部通过后（0 failed），必须在 `.gate/tester.pass` 写入通行证 JSON：
+
+```json
+{"passed": true, "timestamp": "ISO8601时间", "summary": "X passed, Y skipped, 0 failed", "total": N, "failed": 0}
+```
+
+如果有失败项，写入 `"passed": false`。
+
+**重要：** 这是 git commit 门禁系统的强制要求，每次运行测试都必须更新通行证文件。时间戳用 `datetime.now().isoformat()` 生成。

@@ -107,3 +107,15 @@ done
 | 1-2 🔴 → 7 | 注释率15-25% → 7 | 1-2 死代码 → 7 | B: 6-7 |
 | 3-5 🔴 → 4 | 注释率<15% → 4 | 3+ 死代码 → 4 | C: 4-5 |
 | 5+ 🔴 → 1 | — | — | D: <4 |
+
+## 通行证机制
+
+审查完成后，必须在 `.gate/quality.pass` 写入通行证 JSON：
+
+```json
+{"passed": true, "timestamp": "ISO8601时间", "summary": "安全:X严重 注释:Y 综合:Z", "score": "A", "critical_count": 0}
+```
+
+**通过条件：** 安全 🔴严重 = 0 且综合评分 ≥ B。不满足则 `"passed": false`。
+
+**重要：** 这是 git commit 门禁系统的强制要求，每次运行质量审查都必须更新通行证文件。时间戳用 `datetime.now().isoformat()` 生成。
