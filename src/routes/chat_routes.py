@@ -10,9 +10,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session as DbSession
 
-from src.database import get_session
+from src.database import engine, get_session
 from src.middleware.auth_middleware import get_current_user
 from src.models.user import User
+from src.models.session import Session as SessionModel
 from src.repositories.vector_repo import VectorRepository
 from src.repositories.session_repo import SessionRepository
 from src.repositories.message_repo import MessageRepository
@@ -123,39 +124,18 @@ async def load_messages(
     msg_repo = MessageRepository(db)
     messages = msg_repo.get_by_session(session_id)
 
-    # 在 Python 端渲染消息 HTML
-    parts = []
+    # 解码引用的 JSON 为结构化数据，传给 Jinja2 模板自动转义
     for msg in messages:
-        if msg.role == "user":
-            parts.append(f'<div class="message-user">{html.escape(msg.content)}</div>')
-        else:
-            refs_html = ""
-            if msg.references:
-                try:
-                    refs = json.loads(msg.references)
-                    ref_items = []
-                    for i, ref in enumerate(refs, 1):
-                        ref_items.append(
-                            f'<div class="text-xs mb-1">'
-                            f'<span class="font-medium">[{i}] {html.escape(ref["source"])}</span> '
-                            f'<span class="text-gray-400">(相似度: {ref["score"]})</span>'
-                            f'<p class="text-gray-500 mt-0.5">{html.escape(ref["content"])}...</p>'
-                            f'</div>'
-                        )
-                    refs_html = (
-                        '<details class="references-box mt-2"><summary class="cursor-pointer font-medium">'
-                        f'📚 引用来源（{len(refs)} 条）</summary>'
-                        f'{"".join(ref_items)}</details>'
-                    )
-                except Exception:
-                    pass
-            escaped_content = html.escape(msg.content).replace("\n", "<br>")
-            parts.append(f'<div class="message-assistant">{escaped_content}{refs_html}</div>')
+        if msg.references:
+            try:
+                msg.references = json.loads(msg.references)
+            except Exception as e:
+                logger.warning(f"解析消息引用失败 (msg_id={msg.id}): {e}")
+                msg.references = None
 
-    html_content = "".join(parts)
     return templates.TemplateResponse(
         request, "_chat_messages.html",
-        {"request": request, "user": user, "html_content": html_content}
+        {"request": request, "user": user, "messages": messages}
     )
 
 
@@ -186,6 +166,7 @@ async def chat_send(
     msg_repo = MessageRepository(db)
     msg_repo.create(session_id, "user", question)
 
+    # ⚠️ 以下"会话获取→消息保存→历史加载"逻辑与 chat_stream 重复，修改时需同步两处
     # 加载历史构建多轮对话上下文
     history_msgs = msg_repo.get_by_session(session_id)
     history_text = ""
@@ -203,7 +184,7 @@ async def chat_send(
     refs_json = json.dumps(references, ensure_ascii=False) if references else None
     msg_repo.create(session_id, "assistant", answer, refs_json)
 
-    # 更新会话标题（取前30字）和更新时间
+    # 更新会话：首次对话用前30字做标题，后续对话只刷新更新时间
     if sess.title == "新对话":
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
@@ -282,13 +263,12 @@ async def chat_stream(
     else:
         full_question = question
 
-    # 更新标题
+    # 更新标题（首次对话用问题前30字作为会话标题）
     if sess.title == "新对话":
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
 
     # 先检索（使用带历史的完整查询）
-    retriever = rag.vector_repo.as_retriever(k=3)
     try:
         docs_with_scores = rag.vector_repo._get_store().similarity_search_with_score(full_question, k=3)
     except Exception:
@@ -312,12 +292,11 @@ async def chat_stream(
     if not kb_context:
         kb_context = "（知识库中暂无相关内容）"
 
-    # 获取 LLM 和 prompt
-    from src.bot import get_llm
+    # 使用 rag 内置的 LLM（避免重复创建）
     from src.services.rag_service import SYSTEM_PROMPT
     from langchain_core.prompts import ChatPromptTemplate
 
-    llm = get_llm()
+    llm = rag.llm
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
         ("human", "{input}"),
@@ -346,14 +325,19 @@ async def chat_stream(
             yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
 
         finally:
-            # 无论如何（正常结束/中断/报错）都保存已生成的内容
+            # 用独立 session 保存，避免长时间流式导致连接过期
             if full_answer.strip():
                 try:
-                    refs_json = json.dumps(references, ensure_ascii=False) if references else None
-                    msg_repo.create(session_id, "assistant", full_answer, refs_json)
-                    sess.updated_at = datetime.now(timezone.utc)
-                    db.add(sess)
-                    db.commit()
+                    from src.database import Session as NewDbSession
+                    with NewDbSession(engine) as save_db:
+                        save_repo = MessageRepository(save_db)
+                        save_repo.create(session_id, "assistant", full_answer,
+                                         json.dumps(references, ensure_ascii=False) if references else None)
+                        s = save_db.get(SessionModel, session_id)
+                        if s:
+                            s.updated_at = datetime.now(timezone.utc)
+                            save_db.add(s)
+                            save_db.commit()
                     logger.info(f"已保存消息 ({len(full_answer)} 字)")
                 except Exception as e:
                     logger.error(f"保存消息失败: {e}")

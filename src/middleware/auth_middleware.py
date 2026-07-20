@@ -11,6 +11,8 @@ from src.config import JWT_SECRET, JWT_ALGORITHM
 from src.database import get_session
 from src.models.user import User, UserRole
 
+# auto_error=False：验证失败时不自动报 401，而是返回 None，
+# 这样 get_optional_user 可以在未登录时正常返回 None 而不报错
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 

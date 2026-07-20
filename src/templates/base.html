@@ -12,7 +12,7 @@
 <body>
     <nav class="navbar">
         <div class="navbar-inner">
-            <a href="/" class="nav-brand">💪 AIFitBot</a>
+            <a href="/" class="nav-brand"><span>💪</span>AIFitBot</a>
             <div class="nav-links">
                 {% if user %}
                     <span class="nav-user">{{ user.username }}</span>
@@ -25,24 +25,24 @@
                     <a href="/auth/logout" class="nav-logout">退出</a>
                 {% else %}
                     <a href="/auth/login">登录</a>
-                    <a href="/auth/register" class="btn btn-primary" style="padding:6px 16px;">注册</a>
+                    <a href="/auth/register" class="btn btn-primary" style="padding:7px 18px;font-size:.82rem;">注册</a>
                 {% endif %}
             </div>
         </div>
     </nav>
 
-    <main style="max-width:1200px;margin:0 auto;padding:24px 20px;">
+    <main style="max-width:1200px;margin:0 auto;padding:28px 24px;">
         {% block content %}{% endblock %}
     </main>
 
     {% if msg %}
     <div x-data="{show:true}" x-show="show" x-init="setTimeout(()=>show=false,4000)" class="toast toast-success">
-        {{ msg }} <button @click="show=false" style="margin-left:12px;font-weight:700;border:none;background:none;cursor:pointer;">&times;</button>
+        ✅ {{ msg }} <button @click="show=false" style="margin-left:10px;font-weight:700;border:none;background:none;cursor:pointer;font-size:1rem;">&times;</button>
     </div>
     {% endif %}
     {% if error %}
     <div x-data="{show:true}" x-show="show" x-init="setTimeout(()=>show=false,5000)" class="toast toast-error">
-        {{ error }} <button @click="show=false" style="margin-left:12px;font-weight:700;border:none;background:none;cursor:pointer;">&times;</button>
+        ⚠️ {{ error }} <button @click="show=false" style="margin-left:10px;font-weight:700;border:none;background:none;cursor:pointer;font-size:1rem;">&times;</button>
     </div>
     {% endif %}
 </body>

@@ -1,3 +1,5 @@
+"""RAG 管道模块——阿里云百炼 Embedding 适配 + 文档加载 + 向量库构建 + 检索链组装。"""
+
 import os
 from typing import List
 

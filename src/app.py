@@ -1,3 +1,8 @@
+"""Streamlit 原型入口——早期 Web 界面的开发原型，现已由 FastAPI (main.py) 取代。
+
+如需运行: uv run streamlit run src/app.py
+"""
+
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

@@ -18,6 +18,7 @@ def get_llm():
         raise ValueError(f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}")
 
 
+# 系统提示词——定义 AI 教练的角色定位、能力和回复风格，所有对话共享此设定
 SYSTEM_PROMPT = """你是一位专业的私人健身教练与营养师。你有以下能力：
 1. 根据用户的身体数据（身高、体重、年龄、性别、目标、可用器材）设计训练计划。
 2. 提供饮食建议。

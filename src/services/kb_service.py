@@ -15,9 +15,15 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
 
 class KBService:
-    """知识库管理服务。"""
+    """知识库管理服务——协调文档存储和向量化两个子系统。"""
 
     def __init__(self, session: Session, vector_repo: VectorRepository):
+        """初始化知识库服务。
+
+        Args:
+            session: 数据库会话，用于文档元数据 CRUD。
+            vector_repo: 向量库仓库，负责文档切分、向量生成和检索。
+        """
         self.repo = DocumentRepository(session)
         self.vector_repo = vector_repo
 
@@ -64,7 +70,10 @@ class KBService:
             return True, f"上传成功，已切分为 {chunk_count} 个知识块"
         except Exception as e:
             self.repo.update_status(doc.id, "error", error_msg=str(e))
-            self.vector_repo.delete_file(stored_name)
+            try:
+                self.vector_repo.delete_file(stored_name)
+            except Exception as del_err:
+                logger.warning(f"清理文件失败: {stored_name}, {del_err}")
             logger.error(f"向量化失败: {original_filename}, {e}")
             return False, f"文档处理失败: {e}"
 

@@ -50,6 +50,6 @@ APP_VERSION = "0.2.1"
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 if not ADMIN_PASSWORD:
-    import random, string
+    import random, string, logging
     ADMIN_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-    print(f"[AIFitBot] 自动生成管理员密码: {ADMIN_PASSWORD}")
+    logging.getLogger("aifitbot").warning("已自动生成管理员密码，请通过 .env 文件中的 ADMIN_PASSWORD 查看")

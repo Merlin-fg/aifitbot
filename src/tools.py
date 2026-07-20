@@ -1,3 +1,8 @@
+"""LangChain 工具函数——供 Agent 模式自动调用。
+
+TODO: 目前 calculate_bmi 未集成到对话流程中，后续版本可通过 ToolService 绑定。
+"""
+
 from langchain.tools import tool
 
 @tool

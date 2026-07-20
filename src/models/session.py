@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field
 
 
 class Session(SQLModel, table=True):

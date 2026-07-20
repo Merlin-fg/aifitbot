@@ -13,6 +13,7 @@ from src.config import APP_TITLE, APP_VERSION, ADMIN_USERNAME, ADMIN_PASSWORD, A
 from src.database import engine, init_db, get_session
 from src.models.user import User, UserRole
 from src.models.message import Message
+from src.models.document import Document
 from src.models.session import Session as SessionModel
 from src.middleware.auth_middleware import get_optional_user, get_current_user, require_admin
 from src.services.auth_service import AuthService
@@ -44,8 +45,12 @@ async def lifespan(app: FastAPI):
                     role=UserRole.ADMIN,
                 )
                 logger.info(f"已创建默认管理员: {ADMIN_USERNAME}")
-            except Exception:
-                logger.info(f"管理员账号已存在（由其他进程创建）: {ADMIN_USERNAME}")
+            except Exception as e:
+                if "UNIQUE constraint" in str(e) or "duplicate" in str(e).lower():
+                    logger.info(f"管理员账号已存在（由其他进程创建）: {ADMIN_USERNAME}")
+                else:
+                    logger.error(f"创建管理员失败: {e}")
+                    raise
         else:
             logger.info(f"管理员账号已存在: {ADMIN_USERNAME}")
 
@@ -122,6 +127,7 @@ async def handle_login(
             request, "login.html", {"request": request, "user": None, "error": msg}
         )
 
+    import os
     response = RedirectResponse("/chat", status_code=303)
     response.set_cookie(
         key="access_token",
@@ -129,6 +135,7 @@ async def handle_login(
         httponly=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
+        secure=os.getenv("APP_ENV") == "production",
     )
     return response
 
@@ -261,7 +268,7 @@ def page_admin_dashboard(
 
     stats = {
         "user_count": user_repo.user_count(),
-        "doc_count": len(doc_repo.list_all()),
+        "doc_count": session.exec(select(func.count(Document.id))).one(),
         "session_count": session.exec(select(func.count(SessionModel.id))).one(),
         "message_count": session.exec(select(func.count(Message.id))).one(),
     }

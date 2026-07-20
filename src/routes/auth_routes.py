@@ -19,6 +19,7 @@ def register(
     session: Session = Depends(get_session),
 ):
     """用户注册（表单提交）。"""
+    username = username.strip()
     if not username or not password:
         raise HTTPException(status_code=400, detail="用户名和密码不能为空")
     if len(username) < 2:

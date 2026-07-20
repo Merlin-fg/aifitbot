@@ -14,25 +14,37 @@ from src.utils.logger import logger
 
 
 class AuthService:
-    """用户认证与 JWT 管理。"""
+    """用户认证与 JWT（JSON Web Token，一种防篡改的身份令牌）管理。"""
 
     def __init__(self, session: Session):
+        """初始化认证服务。
+
+        Args:
+            session: SQLModel 数据库会话，用于操作用户表。
+        """
         self.repo = UserRepository(session)
 
     # ---- 密码工具 ----
     @staticmethod
-    def hash_password(password: str) -> str:
-        """将明文密码哈希化。"""
-        password_bytes = password.encode("utf-8")[:72]  # bcrypt 限制 72 字节
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
+    def _normalize_password(password: str) -> bytes:
+        """预处理密码：超 72 字节时先用 SHA-256 哈希缩短，避免 bcrypt 自身截断破坏 UTF-8 多字节字符。"""
+        pw_bytes = password.encode("utf-8")
+        if len(pw_bytes) > 72:
+            import hashlib
+            return hashlib.sha256(pw_bytes).hexdigest().encode("utf-8")
+        return pw_bytes
 
-    @staticmethod
-    def verify_password(plain_password: str, hashed_password: str) -> bool:
+    @classmethod
+    def hash_password(cls, password: str) -> str:
+        """将明文密码哈希化。"""
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(cls._normalize_password(password), salt).decode("utf-8")
+
+    @classmethod
+    def verify_password(cls, plain_password: str, hashed_password: str) -> bool:
         """验证明文密码是否与哈希匹配。"""
-        password_bytes = plain_password.encode("utf-8")[:72]
         hashed_bytes = hashed_password.encode("utf-8")
-        return bcrypt.checkpw(password_bytes, hashed_bytes)
+        return bcrypt.checkpw(cls._normalize_password(plain_password), hashed_bytes)
 
     # ---- 注册 ----
     def register(self, username: str, password: str) -> tuple[bool, str]:

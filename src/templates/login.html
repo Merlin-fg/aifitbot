@@ -1,23 +1,21 @@
 {% extends "base.html" %}
-{% block title %}登录 - AIFitBot{% endblock %}
+{% block title %}登录 — AIFitBot{% endblock %}
 {% block content %}
-<div style="max-width:400px;margin:60px auto;">
-    <div class="card" style="padding:32px;">
-        <h1 style="font-size:1.5rem;font-weight:700;text-align:center;margin-bottom:24px;">登录 AIFitBot</h1>
-        <form method="POST" action="/auth/login" style="display:flex;flex-direction:column;gap:16px;">
-            <div>
-                <label style="display:block;font-size:0.85rem;font-weight:500;color:#44403c;margin-bottom:4px;">用户名</label>
+<div class="form-page">
+    <div class="card form-card">
+        <h1>👋 欢迎回来</h1>
+        <form method="POST" action="/auth/login">
+            <div class="form-group">
+                <label>用户名</label>
                 <input type="text" name="username" required class="input" placeholder="请输入用户名">
             </div>
-            <div>
-                <label style="display:block;font-size:0.85rem;font-weight:500;color:#44403c;margin-bottom:4px;">密码</label>
+            <div class="form-group">
+                <label>密码</label>
                 <input type="password" name="password" required class="input" placeholder="请输入密码">
             </div>
             <button type="submit" class="btn btn-primary" style="width:100%;">登录</button>
         </form>
-        <p style="text-align:center;font-size:0.85rem;color:#78716c;margin-top:16px;">
-            还没有账号？<a href="/auth/register" style="color:#059669;font-weight:500;text-decoration:none;">立即注册</a>
-        </p>
+        <p class="form-footer">还没有账号？<a href="/auth/register">立即注册</a></p>
     </div>
 </div>
 {% endblock %}

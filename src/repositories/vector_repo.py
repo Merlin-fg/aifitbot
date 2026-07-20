@@ -1,7 +1,6 @@
 """向量数据库仓库——封装 ChromaDB 的读写操作。"""
 
 import os
-import shutil
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,25 +21,27 @@ class VectorRepository:
     def __init__(self, persist_dir: str = "chroma_db",
                  data_dir: str = "data",
                  embedding=None):
+        """初始化向量库仓库。
+
+        Args:
+            persist_dir: ChromaDB 数据持久化目录，向量库文件存于此。
+            data_dir: 原始文档存储目录，上传的文件放这里。
+            embedding: 嵌入函数实例（如 DashScopeEmbeddings），用于把文本转为向量。
+                       传入 None 会导致检索时报错。
+        """
         self.persist_dir = persist_dir
         self.data_dir = data_dir
         self.embedding = embedding
         self._store: Optional[Chroma] = None
 
     def _get_store(self) -> Chroma:
-        """懒加载 ChromaDB 实例。"""
+        """懒加载 ChromaDB 实例（首次访问时才连接磁盘，避免启动阻塞）。"""
         if self._store is None:
-            if os.path.exists(self.persist_dir) and os.listdir(self.persist_dir):
-                self._store = Chroma(
-                    persist_directory=self.persist_dir,
-                    embedding_function=self.embedding,
-                )
-            else:
-                # 空库初始化
-                self._store = Chroma(
-                    persist_directory=self.persist_dir,
-                    embedding_function=self.embedding,
-                )
+            os.makedirs(self.persist_dir, exist_ok=True)
+            self._store = Chroma(
+                persist_directory=self.persist_dir,
+                embedding_function=self.embedding,
+            )
         return self._store
 
     # ---- 文档处理 ----
@@ -54,7 +55,11 @@ class VectorRepository:
         return loader.load()
 
     def _split_documents(self, docs: List[LCDocument]) -> List[LCDocument]:
-        """文本切分。"""
+        """把长文档切分成小块（每块 500 字符，重叠 50 字符）。
+
+        chunk_overlap=50 确保块之间信息不丢失（一个句子可能跨两个块）。
+        separators 列表包含中文标点，使切分尽量在句子边界处断开，而非
+        生硬地切断句子。"""
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=50,
@@ -88,15 +93,18 @@ class VectorRepository:
         return len(chunks)
 
     def remove_document(self, stored_name: str) -> bool:
-        """从向量库中删除指定文档的所有块。
+        """从向量库中删除指定文档的所有向量块。
+
+        注意：直接访问 ChromaDB 内部 ._collection 属性（非公共 API），
+        因为 Chroma 的公共接口不支持按 metadata.source 过滤删除。
 
         Args:
-            stored_name: 存储文件名（元数据 source 字段匹配）
+            stored_name: 存储文件名，与 metadata 的 source 字段匹配。
         """
         store = self._get_store()
         try:
-            collection = store._collection
-            # 按 metadata.source 过滤删除
+            collection = store._collection  # ChromaDB 底层集合对象，非公共 API
+            # 按 metadata.source 过滤，找到属于该文档的所有块 ID
             results = collection.get(where={"source": stored_name})
             ids = results.get("ids", [])
             if ids:
@@ -117,7 +125,11 @@ class VectorRepository:
             logger.warning(f"文件删除失败: {file_path}, {e}")
 
     def as_retriever(self, k: int = 3):
-        """返回检索器实例。"""
+        """返回 LangChain 检索器，用于 RAG 管道中的文档检索。
+
+        Args:
+            k: 返回的最相似文档块数量（默认 3）。
+        """
         return self._get_store().as_retriever(search_kwargs={"k": k})
 
     def get_document_sources(self) -> List[str]:
