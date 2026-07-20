@@ -20,6 +20,17 @@ SYSTEM_PROMPT = (
     "你是一位专业的私人健身教练与营养师。根据以下已知的健身知识片段回答用户问题。"
     "如果知识片段不足以回答，可以结合你自身的专业知识补充，"
     "但请务必在回答中明确指出哪些内容来自知识库、哪些来自你的补充知识。"
+    "\n\n## 训练计划隐藏格式（极其重要，必须遵守）"
+    "\n当用户询问训练动作或计划时，在回答末尾插入训练计划 JSON，"
+    "\n用 STARTJSON 和 ENDJSON 标记包裹，必须各占单独一行："
+    "\nSTARTJSON"
+    "\n{{\"plan_name\":\"计划名\",\"exercises\":[{{\"name\":\"动作\",\"sets\":4,\"reps\":\"8-12\",\"rest_sec\":90,\"notes\":\"要点\"}}]}}"
+    "\nENDJSON"
+    "\n标记单词必须完整拼写、独占一行、前后不要加任何其他字符。"
+    "\n\n## 打卡引导"
+    "\n如果本次回答包含了训练计划，在回答最末尾追加一行："
+    "\n💡 需要我把这个计划加入训练打卡吗？回复\"需要\"即可。"
+    "{profile}"
     "\n\n参考知识片段：\n{context}"
 )
 
@@ -214,6 +225,7 @@ class RAGService:
                     "context": itemgetter("context"),
                     "input": itemgetter("input"),
                     "chat_history": itemgetter("chat_history"),
+                    "profile": itemgetter("profile"),
                 }
                 | prompt
                 | self.llm
@@ -222,12 +234,14 @@ class RAGService:
         return self._chain
 
     def query(self, user_input: str,
-              chat_history: Optional[List] = None) -> dict:
+              chat_history: Optional[List] = None,
+              profile_text: str = "") -> dict:
         """执行 RAG 查询。
 
         Args:
             user_input: 用户问题
             chat_history: 对话历史，格式为 [HumanMessage, AIMessage, ...]
+            profile_text: 用户档案文本（注入 system prompt）
 
         Returns:
             {"answer": str, "references": list}
@@ -268,6 +282,9 @@ class RAGService:
         else:
             chat_history = self._summarize_history(chat_history)
 
+        # 构建档案文本
+        profile_block = f"\n\n## 用户档案\n{profile_text}" if profile_text else ""
+
         # 第五步：构建上下文并生成回答
         chain = self._get_chain()
         formatted_context = "\n\n---\n\n".join(
@@ -282,6 +299,7 @@ class RAGService:
                 "context": formatted_context,
                 "input": user_input,
                 "chat_history": chat_history,
+                "profile": profile_block,
             })
         except Exception as e:
             logger.error(f"LLM 生成失败: {e}")
@@ -290,6 +308,7 @@ class RAGService:
                 "context": formatted_context,
                 "input": user_input,
                 "chat_history": [],
+                "profile": profile_block,
             })
 
         result = {"answer": answer, "references": references}

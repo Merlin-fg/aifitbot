@@ -16,9 +16,10 @@ from src.config import CHROMA_DIR
 
 # === 类别 → Collection 名称映射 ===
 COLLECTION_MAP = {
-    "actions":    "aifitbot_actions",
-    "principles": "aifitbot_principles",
-    "nutrition":  "aifitbot_nutrition",
+    "actions":     "aifitbot_actions",
+    "principles":  "aifitbot_principles",
+    "nutrition":   "aifitbot_nutrition",
+    "stretching":  "aifitbot_stretching",
 }
 
 CATEGORY_KEYWORDS = {
@@ -38,10 +39,16 @@ CATEGORY_KEYWORDS = {
     ],
     "principles": [
         "计划", "频率", "周期", "原理", "误区", "恢复", "休息", "睡眠",
-        "热身", "拉伸", "伤病", "受伤", "预防", "安全", "过度训练",
+        "热身", "伤病", "受伤", "预防", "安全", "过度训练",
         "减脂原理", "增肌原理", "力量训练原理", "策略", "方法",
         "新手", "初级", "入门", "平台期", "进阶", "训练量", "容量",
         "HIIT", "减载", "超级组", "递减组", "周期化", "MRV", "超量恢复",
+    ],
+    "stretching": [
+        "拉伸", "泡沫轴", "筋膜", "放松", "活动度", "柔韧性", "按摩",
+        "恢复", "DOMS", "酸痛", "睡眠", "冷热", "冰浴", "筋膜枪",
+        "脊柱", "胸椎", "髋关节", "踝关节", "腕关节", "足底", "颈部",
+        "减压", "悬挂",
     ],
 }
 
@@ -159,6 +166,8 @@ class VectorRepository:
             return "nutrition"
         elif "principle" in name or "原理" in name:
             return "principles"
+        elif "stretch" in name or "拉伸" in name or "恢复" in name:
+            return "stretching"
         return "general"
 
     def _classify_query(self, query: str) -> str:

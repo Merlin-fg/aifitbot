@@ -1,0 +1,14 @@
+{% for ex in today.exercises %}
+<div style="display:flex;align-items:center;gap:var(--s-3);padding:var(--s-3) 0;border-bottom:1px solid var(--c-bdr);{% if ex.completed %}opacity:0.5;{% endif %}">
+    <form hx-post="/api/workout/toggle" hx-target="#workout-list" hx-swap="innerHTML" style="margin:0;">
+        <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+        <button type="submit" style="width:24px;height:24px;border-radius:50%;border:2px solid {% if ex.completed %}var(--c-teal){% else %}var(--c-bdr2){% endif %};background:{% if ex.completed %}var(--c-teal){% else %}transparent{% endif %};cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--df) var(--ease);">
+            {% if ex.completed %}<span style="color:#fff;font-size:12px;">✓</span>{% endif %}
+        </button>
+    </form>
+    <div style="flex:1;">
+        <div style="font-weight:600;font-size:var(--t-sm);{% if ex.completed %}text-decoration:line-through;{% endif %}">{{ ex.name }}</div>
+        <div style="font-size:var(--t-xs);color:var(--c-text3);">{{ ex.sets }}组 × {{ ex.reps }}次 · 休息{{ ex.rest_sec }}秒{% if ex.notes %} · {{ ex.notes }}{% endif %}</div>
+    </div>
+</div>
+{% endfor %}

@@ -39,6 +39,18 @@ class UserRepository:
         self.session.commit()
         return True
 
+    def update_profile(self, user_id: int, **kwargs) -> bool:
+        """更新用户档案字段。"""
+        user = self.get_by_id(user_id)
+        if not user:
+            return False
+        for key, val in kwargs.items():
+            if hasattr(user, key):
+                setattr(user, key, val)
+        self.session.add(user)
+        self.session.commit()
+        return True
+
     def user_count(self) -> int:
         """返回用户总数。"""
         from sqlmodel import func

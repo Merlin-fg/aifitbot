@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}我的档案 — AIFitBot{% endblock %}
+{% block content %}
+<div class="form-page">
+    <div class="card form-card">
+        <h1>我的健身档案</h1>
+        <p style="text-align:center;color:var(--c-text2);font-size:var(--t-sm);margin-bottom:var(--s-6);">
+            填写档案后，AI 教练会根据你的身体数据提供个性化建议
+        </p>
+        <form method="POST" action="/profile">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s-4);">
+                <div class="form-group">
+                    <label>年龄</label>
+                    <input type="number" name="age" class="input" placeholder="如 25"
+                           value="{{ profile.age or '' }}" min="10" max="80">
+                </div>
+                <div class="form-group">
+                    <label>性别</label>
+                    <select name="gender" class="input">
+                        <option value="">请选择</option>
+                        <option value="男" {% if profile.gender=='男' %}selected{% endif %}>男</option>
+                        <option value="女" {% if profile.gender=='女' %}selected{% endif %}>女</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>身高 (cm)</label>
+                    <input type="number" name="height_cm" class="input" placeholder="如 170"
+                           value="{{ profile.height_cm or '' }}" min="100" max="250">
+                </div>
+                <div class="form-group">
+                    <label>体重 (kg)</label>
+                    <input type="number" name="weight_kg" class="input" placeholder="如 65"
+                           value="{{ profile.weight_kg or '' }}" min="30" max="200" step="0.1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>训练目标</label>
+                <select name="goal" class="input">
+                    <option value="">请选择</option>
+                    <option value="增肌" {% if profile.goal=='增肌' %}selected{% endif %}>增肌</option>
+                    <option value="减脂" {% if profile.goal=='减脂' %}selected{% endif %}>减脂</option>
+                    <option value="塑形" {% if profile.goal=='塑形' %}selected{% endif %}>塑形</option>
+                    <option value="保持健康" {% if profile.goal=='保持健康' %}selected{% endif %}>保持健康</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>可用器械</label>
+                <input type="text" name="equipment" class="input"
+                       placeholder="如 哑铃、杠铃、弹力带、自重"
+                       value="{{ profile.equipment or '' }}">
+            </div>
+            <div class="form-group">
+                <label>伤病或注意事项</label>
+                <input type="text" name="injuries" class="input"
+                       placeholder="如 膝盖旧伤、腰椎间盘突出、无"
+                       value="{{ profile.injuries or '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:var(--s-4);">保存档案</button>
+        </form>
+        <p class="form-footer"><a href="/chat">← 返回对话</a></p>
+    </div>
+</div>
+{% endblock %}

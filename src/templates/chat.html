@@ -76,8 +76,8 @@ async function handleStreamSubmit(e){
             }
             buffer=lines[lines.length-1];
         }
-        const aiDiv=document.getElementById('streaming-response');if(aiDiv)aiDiv.classList.remove('typing-cursor');
-    }catch(err){if(err.name!=='AbortError'){const a=document.getElementById('streaming-response');if(a)a.innerHTML='<span style="color:var(--color-error);">连接失败</span>';}}
+        const aiDiv=document.getElementById('streaming-response');if(aiDiv){aiDiv.classList.remove('typing-cursor');aiDiv.removeAttribute('id');}
+    }catch(err){if(err.name!=='AbortError'){const a=document.getElementById('streaming-response');if(a){a.innerHTML='<span style="color:var(--color-error);">连接失败</span>';a.removeAttribute('id');}}}
     htmx.trigger('#session-list','sessionChanged');resetSendButton();input.focus();
 }
 
@@ -91,15 +91,32 @@ function renderStreamingUI(question,skipUserMsg){
     messages.appendChild(ai);messages.scrollTop=messages.scrollHeight;
 }
 
+function cleanPlanJson(text) {
+    // Remove STARTJSON...ENDJSON blocks (complete or partial during streaming)
+    text = text.replace(/STARTJSON[\s\S]*?ENDJSON/g, '');
+    var idx = text.indexOf('STARTJSON');
+    if (idx !== -1 && text.indexOf('ENDJSON', idx) === -1) {
+        text = text.substring(0, idx);
+    }
+    // Backward compat: old [PLAN_JSON] markers
+    text = text.replace(/\[PLAN_JSON\][\s\S]*?\[\/PLAN_JSON\]/g, '');
+    idx = text.indexOf('[PLAN_JSON]');
+    if (idx !== -1 && text.indexOf('[/PLAN_JSON]', idx) === -1) {
+        text = text.substring(0, idx);
+    }
+    return text;
+}
+
 function updateStreamingDOM(){
     const ai=document.getElementById('streaming-response');if(!ai)return;
-    let h=escapeHtml(streamFullAnswer).replace(/\n/g,'<br>');
-    if(streamReferences?.length){h+='<details class="references-box"><summary>引用来源（'+streamReferences.length+' 条）</summary>';streamReferences.forEach((r,i)=>{h+='<div style="font-size:.78rem;margin-top:4px;"><span style="font-weight:600;">['+(i+1)+'] '+escapeHtml(r.source)+'</span> <span style="color:var(--color-text-tertiary);">(相似度:'+r.score+')</span><p style="color:var(--color-text-secondary);">'+escapeHtml(r.content)+'...</p></div>';});h+='</details>';}
+    let displayText = cleanPlanJson(streamFullAnswer);
+    let h = typeof marked !== 'undefined' ? marked.parse(displayText) : escapeHtml(displayText).replace(/\n/g,'<br>');
+    if(streamReferences?.length){h+='<details class="references-box"><summary>引用来源（'+streamReferences.length+' 条）</summary>';streamReferences.forEach((r,i)=>{h+='<div style="font-size:.78rem;margin-top:4px;"><span style="font-weight:600;">['+(i+1)+'] '+escapeHtml(r.source)+'</span> <span style="color:var(--c-text3);">(相似度:'+r.score+')</span><p style="color:var(--c-text2);">'+escapeHtml(r.content)+'...</p></div>';});h+='</details>';}
     ai.innerHTML=h+'<span class="typing-cursor"></span>';
     const mc=document.getElementById('chat-messages');if(mc.scrollHeight-mc.scrollTop-mc.clientHeight<80)mc.scrollTop=mc.scrollHeight;
 }
 
-function stopStream(){if(streamAbortController){streamAbortController.abort();streamAbortController=null;}resetSendButton();const a=document.getElementById('streaming-response');if(a){a.classList.remove('typing-cursor');a.removeAttribute('id');if(a.textContent.trim()==='')a.innerHTML='<span style="color:var(--color-text-tertiary);">已中断</span>';}}
+function stopStream(){if(streamAbortController){streamAbortController.abort();streamAbortController=null;}resetSendButton();const a=document.getElementById('streaming-response');if(a){a.classList.remove('typing-cursor');a.removeAttribute('id');if(a.textContent.trim()==='')a.innerHTML='<span style="color:var(--c-text3);">已中断</span>';}}
 function resetSendButton(){isStreaming=false;streamingSessionId=0;streamAbortController=null;streamQuestion='';updateStopButton();}
 function updateStopButton(){if(isStreaming&&activeSessionId===streamingSessionId){document.getElementById('send-btn').style.display='none';document.getElementById('stop-btn').style.display='inline-flex';}else{document.getElementById('send-btn').style.display='inline-flex';document.getElementById('stop-btn').style.display='none';}}
 function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
@@ -112,6 +129,15 @@ async function switchSession(sid,el){
     updateStopButton();
     const r=await fetch('/chat/messages/'+sid);const h=await r.text();
     document.getElementById('chat-messages').innerHTML=h||'<div class="chat-welcome"><div class="welcome-icon">💪</div><p class="welcome-title">开始新对话</p></div>';
+    // Render markdown for loaded messages (innerHTML won't execute inline scripts)
+    document.querySelectorAll('.msg-src').forEach(function(s){
+        var div=s.closest('.message-assistant'), refs=div.querySelector('.references-box');
+        var raw=cleanPlanJson(s.textContent.trim());
+        var html=typeof marked!=='undefined'?marked.parse(raw):raw.replace(/\n/g,'<br>');
+        div.querySelector('.msg-body').innerHTML=html;
+        if(refs)div.appendChild(refs);
+        s.remove();
+    });
     if(isStreaming&&streamingSessionId===sid)renderStreamingUI(null,true);
 }
 async function newSession(){
@@ -129,5 +155,16 @@ async function deleteSession(sid){
     if(activeSessionId===sid){activeSessionId=0;document.getElementById('current-session-id').value='0';document.getElementById('chat-messages').innerHTML='<div class="chat-welcome"><div class="welcome-icon">💪</div><p class="welcome-title">选择一个会话开始对话</p></div>';}
     htmx.trigger('#session-list','sessionChanged');
 }
+
+// Auto-restore last session on page load
+document.body.addEventListener('htmx:afterSettle', function(e){
+    if(e.target.id === 'session-list' && activeSessionId === 0){
+        var first = document.querySelector('.session-item');
+        if(first){
+            var sid = parseInt(first.dataset.sessionId);
+            if(sid) switchSession(sid, first);
+        }
+    }
+});
 </script>
 {% endblock %}

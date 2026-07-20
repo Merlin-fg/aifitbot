@@ -15,9 +15,10 @@ from src.models.user import User, UserRole
 from src.models.message import Message
 from src.models.document import Document
 from src.models.session import Session as SessionModel
+from src.models.workout import WorkoutPlan, WorkoutExercise, CheckIn
 from src.middleware.auth_middleware import get_optional_user, get_current_user, require_admin
 from src.services.auth_service import AuthService
-from src.routes import auth_routes, kb_routes, chat_routes
+from src.routes import auth_routes, kb_routes, chat_routes, workout_routes
 from src.repositories.user_repo import UserRepository
 from src.repositories.document_repo import DocumentRepository
 from src.utils.logger import logger
@@ -81,6 +82,7 @@ templates = Jinja2Templates(directory=str(templates_dir))
 app.include_router(auth_routes.router)
 app.include_router(kb_routes.api_router)
 app.include_router(chat_routes.router)
+app.include_router(workout_routes.router)
 
 
 # ============================================================
@@ -241,6 +243,58 @@ async def handle_change_password(
         request, "change_password.html",
         {"request": request, "user": user, "msg": "密码修改成功"}
     )
+
+
+# ============================================================
+# 用户档案页面（需登录）
+# ============================================================
+
+@app.get("/profile")
+def page_profile(request: Request, user: User = Depends(get_current_user)):
+    """用户档案页面。"""
+    return templates.TemplateResponse(
+        request, "profile.html",
+        {"request": request, "user": user, "profile": user}
+    )
+
+
+@app.post("/profile")
+async def handle_profile(
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """保存用户档案。"""
+    form = await request.form()
+    user_repo = UserRepository(session)
+
+    updates = {}
+    for field in ["age", "height_cm", "weight_kg", "gender", "goal", "equipment", "injuries"]:
+        val = form.get(field, "").strip()
+        if field in ("age", "height_cm"):
+            updates[field] = int(val) if val else None
+        elif field == "weight_kg":
+            updates[field] = float(val) if val else None
+        else:
+            updates[field] = val if val else None
+
+    user_repo.update_profile(user.id, **updates)
+
+    return templates.TemplateResponse(
+        request, "profile.html",
+        {"request": request, "user": user, "profile": user,
+         "msg": "档案已更新"}
+    )
+
+
+# ============================================================
+# 动作库浏览页（需登录）
+# ============================================================
+
+@app.get("/exercises")
+def page_exercises(request: Request, user: User = Depends(get_current_user)):
+    """动作库浏览页面。"""
+    return templates.TemplateResponse(request, "exercises.html", {"request": request, "user": user})
 
 
 # ============================================================

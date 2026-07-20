@@ -1,10 +1,10 @@
-"""对话路由——多会话管理 + RAG 问答 + 消息持久化 + 流式输出。"""
+"""对话路由——多会话管理 + RAG 问答 + 消息持久化 + 流式输出 + 打卡导入。"""
 
 import json
 import html
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import StreamingResponse
@@ -28,13 +28,32 @@ templates_dir = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
 def get_rag_service() -> RAGService:
-    """依赖注入：RAGService。"""
     from src.bot import get_llm
     from src.rag import DashScopeEmbeddings
     llm = get_llm()
     embedding = DashScopeEmbeddings()
     vector_repo = VectorRepository(embedding=embedding)
     return RAGService(llm, vector_repo)
+
+CONFIRM_WORDS = ["需要", "好的", "加入打卡", "可以", "行", "ok", "OK", "好"]
+
+
+def try_import_workout(question: str, session_id: int, user_id: int,
+                       db: DbSession) -> Optional[str]:
+    """检测打卡确认词，尝试从历史 AI 回答导入训练计划。返回计划名或 None。"""
+    if not any(w in question for w in CONFIRM_WORDS):
+        return None
+    msg_repo = MessageRepository(db)
+    prev_msgs = msg_repo.get_by_session(session_id, limit=5)
+    for pm in reversed(prev_msgs):
+        if pm.role == "assistant" and pm.content:
+            from src.services.workout_service import WorkoutService
+            ws = WorkoutService(db)
+            plan_name = ws.parse_and_import(user_id, pm.content)
+            if plan_name:
+                return plan_name
+            break  # only check the most recent AI message
+    return None
 
 
 # ================================================================
@@ -47,7 +66,6 @@ def session_new(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
-    """创建新会话，返回会话 ID。"""
     repo = SessionRepository(db)
     sess = repo.create(user.id, title)
     return {"session_id": sess.id, "title": sess.title}
@@ -59,7 +77,6 @@ async def session_list(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
-    """会话列表（HTML 片段）。"""
     repo = SessionRepository(db)
     sessions = repo.get_by_user(user.id)
     return templates.TemplateResponse(
@@ -75,7 +92,6 @@ def session_rename(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
-    """重命名会话。"""
     repo = SessionRepository(db)
     sess = repo.get_by_id(session_id)
     if not sess or sess.user_id != user.id:
@@ -90,15 +106,12 @@ def session_delete(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
-    """删除会话及其所有消息。"""
     repo = SessionRepository(db)
     sess = repo.get_by_id(session_id)
     if not sess or sess.user_id != user.id:
         return {"error": "会话不存在"}
-    # 先删消息
     msg_repo = MessageRepository(db)
     msg_repo.delete_by_session(session_id)
-    # 再删会话
     repo.delete(session_id)
     return {"ok": True}
 
@@ -114,7 +127,6 @@ async def load_messages(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
-    """加载某会话的历史消息（HTML 片段）。"""
     sess_repo = SessionRepository(db)
     sess = sess_repo.get_by_id(session_id)
     if not sess or sess.user_id != user.id:
@@ -122,19 +134,14 @@ async def load_messages(
             request, "_chat_empty.html",
             {"request": request, "user": user}
         )
-
     msg_repo = MessageRepository(db)
     messages = msg_repo.get_by_session(session_id)
-
-    # 解码引用的 JSON 为结构化数据，传给 Jinja2 模板自动转义
     for msg in messages:
         if msg.references:
             try:
                 msg.references = json.loads(msg.references)
-            except Exception as e:
-                logger.warning(f"解析消息引用失败 (msg_id={msg.id}): {e}")
+            except Exception:
                 msg.references = None
-
     return templates.TemplateResponse(
         request, "_chat_messages.html",
         {"request": request, "user": user, "messages": messages}
@@ -150,7 +157,6 @@ async def chat_send(
     db: DbSession = Depends(get_session),
     rag: RAGService = Depends(get_rag_service),
 ):
-    """发送消息 → RAG 检索 → 保存 → 返回 HTML 片段。"""
     safe_question = html.escape(question)
 
     # 获取或创建会话
@@ -168,26 +174,38 @@ async def chat_send(
     msg_repo = MessageRepository(db)
     msg_repo.create(session_id, "user", question)
 
-    # ⚠️ 以下"会话获取→消息保存→历史加载"逻辑与 chat_stream 重复，修改时需同步两处
-    # 加载历史构建对话历史（滑动窗口：最近 6 轮 = 12 条 + 当前消息 = 13 条）
+    # === 打卡确认拦截（在 RAG 之前） ===
+    plan_name = try_import_workout(question, session_id, user.id, db)
+    if plan_name:
+        msg_repo.create(session_id, "assistant",
+            f"已将「{plan_name}」加入训练打卡。点击查看打卡页面开始训练。")
+        return f"""
+<div class="message-user">{safe_question}</div>
+<div class="message-assistant" style="text-align:center;">
+    <div style="font-size:2.2rem;margin-bottom:8px;">✅</div>
+    <p style="font-weight:700;">已加入训练打卡</p>
+    <p style="color:var(--c-text2);font-size:var(--t-sm);">{html.escape(plan_name)}</p>
+    <a href="/workout" class="btn btn-primary" style="margin-top:12px;">查看打卡</a>
+</div>
+"""
+
+    # === 正常 RAG 流程 ===
     history_msgs = msg_repo.get_by_session(session_id, limit=13)
     chat_history: List = []
-    for m in history_msgs[:-1]:  # 排除刚保存的用户消息
+    for m in history_msgs[:-1]:
         if m.role == "user":
             chat_history.append(HumanMessage(content=m.content))
         else:
             chat_history.append(AIMessage(content=m.content))
 
-    # 调用 RAG（传入对话历史）
-    result = rag.query(question, chat_history=chat_history)
+    profile_text = user.to_profile_text()
+    result = rag.query(question, chat_history=chat_history, profile_text=profile_text)
     answer = result["answer"]
     references = result["references"]
 
-    # 保存 AI 回复
     refs_json = json.dumps(references, ensure_ascii=False) if references else None
     msg_repo.create(session_id, "assistant", answer, refs_json)
 
-    # 更新会话：首次对话用前30字做标题，后续对话只刷新更新时间
     if sess.title == "新对话":
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
@@ -196,7 +214,6 @@ async def chat_send(
         db.add(sess)
         db.commit()
 
-    # 构建引用 HTML
     refs_html = ""
     if references:
         ref_items = []
@@ -214,7 +231,10 @@ async def chat_send(
             f'{"".join(ref_items)}</details>'
         )
 
-    escaped_answer = html.escape(answer).replace("\n", "<br>")
+    import re as _re
+    display_answer = _re.sub(r'STARTJSON[\s\S]*?ENDJSON', '', answer)
+    display_answer = _re.sub(r'\[PLAN_JSON\][\s\S]*?\[/PLAN_JSON\]', '', display_answer)
+    escaped_answer = html.escape(display_answer).replace("\n", "<br>")
 
     return f"""
 <div class="message-user">{safe_question}</div>
@@ -237,7 +257,6 @@ async def chat_stream(
     db: DbSession = Depends(get_session),
     rag: RAGService = Depends(get_rag_service),
 ):
-    """流式 RAG 问答——返回 SSE 事件流。"""
     # 获取或创建会话
     sess_repo = SessionRepository(db)
     if session_id:
@@ -253,11 +272,29 @@ async def chat_stream(
     msg_repo = MessageRepository(db)
     msg_repo.create(session_id, "user", question)
 
-    # 加载历史（滑动窗口：最近 6 轮）
+    # === 打卡确认拦截（在 RAG 之前） ===
+    plan_name = try_import_workout(question, session_id, user.id, db)
+    if plan_name:
+        msg_repo.create(session_id, "assistant",
+            f"已将「{plan_name}」加入训练打卡。点击查看打卡页面开始训练。")
+
+        async def confirm_stream():
+            yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+            for ch in f"✅ 已加入训练打卡：{plan_name}\n\n点击打卡页面开始训练吧！":
+                yield f"data: {json.dumps({'type': 'token', 'text': ch})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return StreamingResponse(
+            confirm_stream(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive",
+                     "X-Accel-Buffering": "no"}
+        )
+
+    # === 正常流式 RAG ===
     history_msgs = msg_repo.get_by_session(session_id, limit=13)
     chat_history: List = []
     history_text = ""
-    for m in history_msgs[:-1]:  # 排除刚保存的用户消息
+    for m in history_msgs[:-1]:
         if m.role == "user":
             chat_history.append(HumanMessage(content=m.content))
             history_text += f"用户：{m.content}\n"
@@ -265,16 +302,13 @@ async def chat_stream(
             chat_history.append(AIMessage(content=m.content))
             history_text += f"教练：{m.content}\n"
 
-    # 构建带历史的查询（查询改写用完整历史文本）
     full_question = question
     search_query = f"对话历史：\n{history_text}\n用户最新问题：{question}" if history_text.strip() else question
 
-    # 更新标题（首次对话用问题前30字作为会话标题）
     if sess.title == "新对话":
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
 
-    # 先检索（用带历史的 search_query 召回，用 question 做改写）
     try:
         docs, scores, category = rag.vector_repo.search(search_query, k=3)
         docs_with_scores = list(zip(docs, scores))
@@ -289,7 +323,6 @@ async def chat_stream(
             "score": round(float(score), 4),
         })
 
-    # 构建知识库上下文
     context_parts = []
     for d, _ in docs_with_scores:
         context_parts.append(
@@ -299,7 +332,6 @@ async def chat_stream(
     if not kb_context:
         kb_context = "（知识库中暂无相关内容）"
 
-    # 使用 rag 内置的 LLM（避免重复创建）
     from src.services.rag_service import SYSTEM_PROMPT
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -310,11 +342,10 @@ async def chat_stream(
         ("human", "{input}"),
     ])
 
-    async def generate():
-        """SSE 事件生成器。"""
-        full_answer = ""
+    profile_block = f"\n\n## 用户档案\n{user.to_profile_text()}" if user.to_profile_text() else ""
 
-        # 发送 session_id
+    async def generate():
+        full_answer = ""
         yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
         try:
@@ -323,13 +354,13 @@ async def chat_stream(
                 "context": kb_context,
                 "input": question,
                 "chat_history": chat_history,
+                "profile": profile_block,
             }):
                 token = chunk.content if hasattr(chunk, 'content') else str(chunk)
                 if token:
                     full_answer += token
                     yield f"data: {json.dumps({'type': 'token', 'text': token})}\n\n"
 
-            # 发送引用
             yield f"data: {json.dumps({'type': 'references', 'refs': references})}\n\n"
 
         except Exception as e:
@@ -337,7 +368,6 @@ async def chat_stream(
             yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
 
         finally:
-            # 用独立 session 保存，避免长时间流式导致连接过期
             if full_answer.strip():
                 try:
                     from src.database import Session as NewDbSession
@@ -350,7 +380,6 @@ async def chat_stream(
                             s.updated_at = datetime.now(timezone.utc)
                             save_db.add(s)
                             save_db.commit()
-                    logger.info(f"已保存消息 ({len(full_answer)} 字)")
                 except Exception as e:
                     logger.error(f"保存消息失败: {e}")
 

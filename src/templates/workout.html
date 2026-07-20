@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}训练打卡 — AIFitBot{% endblock %}
+{% block head_extra %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>{% endblock %}
+{% block content %}
+<h1 class="page-title">训练打卡</h1>
+
+<div style="display:flex;gap:var(--s-5);flex-wrap:wrap;align-items:flex-start;">
+
+    <!-- 今日训练 -->
+    <div class="card" style="flex:1;min-width:340px;padding:var(--s-6);">
+        <h2 style="font-size:var(--t-base);font-weight:700;margin-bottom:var(--s-4);">
+            今日训练
+            {% if today.total > 0 %}
+            <span style="font-weight:400;color:var(--c-text3);font-size:var(--t-sm);">
+                ({{ today.done }}/{{ today.total }})
+            </span>
+            {% endif %}
+        </h2>
+        {% if today.total > 0 %}
+        <div style="background:var(--c-bg);border-radius:var(--r-full);height:8px;margin-bottom:var(--s-4);overflow:hidden;">
+            <div style="background:linear-gradient(90deg,var(--c-accent),#f5977a);height:100%;width:{{ today.progress }}%;transition:width var(--dn) var(--ease);"></div>
+        </div>
+        <div id="workout-list">
+            {% include "_workout_list.html" %}
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:var(--s-10) var(--s-6);color:var(--c-text3);">
+            <div style="font-size:2.5rem;margin-bottom:var(--s-3);">🏋️</div>
+            <p>还没有训练计划</p>
+            <p style="font-size:var(--t-xs);margin-top:var(--s-2);">
+                在<a href="/chat" style="color:var(--c-accent);">对话</a>中说"我要练胸"生成计划并导入打卡
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 统计区 -->
+    <div class="card" style="flex:0 0 340px;padding:var(--s-6);">
+        <h2 style="font-size:var(--t-base);font-weight:700;margin-bottom:var(--s-4);">训练统计</h2>
+        {% if stats.total_checkin_days > 0 %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s-3);margin-bottom:var(--s-4);">
+            <div style="text-align:center;padding:var(--s-3);background:var(--c-bg);border-radius:var(--r-md);">
+                <div style="font-size:var(--t-2xl);font-weight:800;color:var(--c-accent);">{{ stats.total_checkin_days }}</div>
+                <div style="font-size:var(--t-xs);color:var(--c-text3);">打卡天数</div>
+            </div>
+            <div style="text-align:center;padding:var(--s-3);background:var(--c-bg);border-radius:var(--r-md);">
+                <div style="font-size:var(--t-2xl);font-weight:800;color:var(--c-teal);">{{ today.total }}</div>
+                <div style="font-size:var(--t-xs);color:var(--c-text3);">计划动作</div>
+            </div>
+        </div>
+        <div style="margin-bottom:var(--s-4);">
+            <canvas id="bodyChart" height="180"></canvas>
+        </div>
+        <div>
+            <canvas id="volumeChart" height="140"></canvas>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:var(--s-10) var(--s-6);color:var(--c-text3);">
+            <div style="font-size:2rem;margin-bottom:var(--s-2);">📊</div>
+            <p style="font-size:var(--t-sm);">完成训练后这里会显示统计数据</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if stats.total_checkin_days > 0 %}
+<script>
+const bodyData = {{ stats.body_parts | tojson }};
+const weeklyData = {{ stats.weekly_sets | tojson }};
+
+// 饼图 — 部位分布
+new Chart(document.getElementById('bodyChart'), {
+    type: 'doughnut',
+    data: {
+        labels: bodyData.map(d => d.part),
+        datasets: [{
+            data: bodyData.map(d => d.count),
+            backgroundColor: ['#f06543','#0ea47a','#3b6df0','#e88a20','#7c3aed','#e04444','#a0a0a0'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 10 } } } }
+    }
+});
+
+// 折线图 — 周训练量
+new Chart(document.getElementById('volumeChart'), {
+    type: 'line',
+    data: {
+        labels: weeklyData.map(d => d.week),
+        datasets: [{
+            label: '训练组数',
+            data: weeklyData.map(d => d.sets),
+            borderColor: '#f06543',
+            backgroundColor: 'rgba(240,101,67,0.08)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#f06543'
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.04)' } },
+            x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

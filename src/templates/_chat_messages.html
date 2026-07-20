@@ -4,15 +4,16 @@
 <div class="message-user">{{ msg.content }}</div>
 {% else %}
 <div class="message-assistant">
-    {{ msg.content }}
+    <script type="text/markdown" class="msg-src">{{ msg.content }}</script>
+    <div class="msg-body"></div>
     {% if msg.references %}
     <details class="references-box">
         <summary>引用来源（{{ msg.references|length }} 条）</summary>
         {% for ref in msg.references %}
         <div style="font-size:.78rem;margin-top:4px;">
             <span style="font-weight:600;">[{{ loop.index }}] {{ ref.source }}</span>
-            <span style="color:var(--color-text-tertiary);">(相似度: {{ ref.score }})</span>
-            <p style="color:var(--color-text-secondary);">{{ ref.content }}...</p>
+            <span style="color:var(--c-text3);">(相似度: {{ ref.score }})</span>
+            <p style="color:var(--c-text2);">{{ ref.content }}...</p>
         </div>
         {% endfor %}
     </details>
