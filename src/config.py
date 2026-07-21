@@ -48,10 +48,14 @@ APP_VERSION = "0.2.1"
 # RAG 配置
 # ============================================================
 CHROMA_DIR = os.getenv("CHROMA_DIR", "chroma_db")
-RAG_K = int(os.getenv("RAG_K", "3"))            # 检索返回文档数
-RAG_MAX_CHUNK = int(os.getenv("RAG_MAX_CHUNK", "300"))  # 每条引用截断字数
+RAG_K = int(os.getenv("RAG_K", "2"))            # 检索返回文档数
+RAG_MAX_CHUNK = int(os.getenv("RAG_MAX_CHUNK", "150"))  # 每条引用截断字数
 RAG_TOKEN_BUDGET = int(os.getenv("RAG_TOKEN_BUDGET", "4096"))  # 上下文 token 预算
 RAG_HISTORY_ROUNDS = int(os.getenv("RAG_HISTORY_ROUNDS", "6"))  # 对话历史保留轮数
+RAG_REJECT_THRESHOLD = float(os.getenv("RAG_REJECT_THRESHOLD", "0.01"))   # rerank 分数低于此值拒答
+RAG_WEAK_THRESHOLD = float(os.getenv("RAG_WEAK_THRESHOLD", "0.18"))     # rerank 分数低于此值追加免责
+RAG_FAST_REJECT = float(os.getenv("RAG_FAST_REJECT", "0.30"))          # 向量相似度低于此值直接拒答，跳过 LLM 调用
+# 校准依据：无关查询 0.16-0.24，相关查询 0.46+，0.30 在中间安全区
 
 # ============================================================
 # 管理员默认账号（首次启动时创建）

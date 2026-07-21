@@ -11,7 +11,7 @@ def get_llm():
             model=MODEL_NAME,
             api_key=API_KEY,
             base_url=BASE_URL,
-            temperature=0.7,
+            temperature=0.9,
         )
     else:
         raise ValueError(f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}")

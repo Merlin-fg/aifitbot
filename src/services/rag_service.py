@@ -17,21 +17,23 @@ from src.config import RAG_K, RAG_MAX_CHUNK, API_KEY, BASE_URL, RAG_HISTORY_ROUN
 from src.utils.logger import logger
 
 SYSTEM_PROMPT = (
-    "你是一位专业的私人健身教练与营养师。根据以下已知的健身知识片段回答用户问题。"
-    "如果知识片段不足以回答，可以结合你自身的专业知识补充，"
-    "但请务必在回答中明确指出哪些内容来自知识库、哪些来自你的补充知识。"
-    "\n\n## 训练计划隐藏格式（极其重要，必须遵守）"
-    "\n当用户询问训练动作或计划时，在回答末尾插入训练计划 JSON，"
-    "\n用 STARTJSON 和 ENDJSON 标记包裹，必须各占单独一行："
+    "你是专业健身教练。只能根据参考知识片段回答，不得编造。"
+    "若片段中无相关信息，回复'抱歉，当前知识库中暂无相关信息'。"
+    "以教练口吻直接回答，不要提及'知识库'。"
+    "请详细回答，充分说明训练原理、动作要点和注意事项，至少300字。"
+    "\n\n## 回答格式（极其重要）"
+    "\n你必须按以下顺序组织回答："
+    "\n1. 先用自然语言给出详细的训练建议，说明训练原理、每个动作的组数次数、动作要领和注意事项"
+    "\n2. 然后在末尾附上结构化训练计划 JSON"
+    "\n3. JSON 之后追加打卡引导语"
+    "\n\n结构化 JSON 格式（用 STARTJSON 和 ENDJSON 各占一行包裹）："
     "\nSTARTJSON"
     "\n{{\"plan_name\":\"计划名\",\"exercises\":[{{\"name\":\"动作\",\"sets\":4,\"reps\":\"8-12\",\"rest_sec\":90,\"notes\":\"要点\"}}]}}"
     "\nENDJSON"
-    "\n标记单词必须完整拼写、独占一行、前后不要加任何其他字符。"
-    "\n\n## 打卡引导"
-    "\n如果本次回答包含了训练计划，在回答最末尾追加一行："
     "\n💡 需要我把这个计划加入训练打卡吗？回复\"需要\"即可。"
-    "{profile}"
+    "\n{profile}"
     "\n\n参考知识片段：\n{context}"
+    "\n\n请根据用户档案中的身体数据和目标来个性化你的建议。在回答中显式提及用户的身高、体重、目标和可用器械，让用户感受到建议是为他们量身定制的。"
 )
 
 QUERY_REWRITE_PROMPT = (
@@ -49,14 +51,23 @@ SUMMARIZE_PROMPT = (
     "对话历史：\n{history}\n\n摘要："
 )
 
+HYDE_PROMPT = (
+    "你是专业的健身教练。下面的用户问题可能表达不完整或过于简短。"
+    "请你把它扩展成一段100-200字的「理想健身教材段落」，"
+    "就像你在编写一本健身百科全书中对应的章节那样去写。"
+    "不要写成对话形式，要写成教材风格的专业段落。\n"
+    "用户问题：{question}\n"
+    "教材段落："
+)
 
 class RAGService:
-    """RAG 服务 v2——查询改写 + 混合检索 + 重排序 + 对话摘要 + 高频缓存。
+    """RAG 服务 v4——向量 + BM25 混合检索 + 质量门控 + 对话摘要 + 高频缓存（极简快速版）。
 
-    v2 新增：
-    - BM25 + 向量 RRF 混合检索（在 vector_repo 中实现）
-    - 阿里云 DashScope gte-rerank 重排序
-    - 超 6 轮对话自动摘要压缩
+    优化原则：每个组件必须有评估数据支撑。速度优先，零额外 LLM 调用。
+    - 保留 BM25 + 向量混合检索（Hit@3 93.3%）✓
+    - 移除 HyDE（Hit@3 96.7%→93.3%，损失 3.4pp，省一次 LLM 调用）✗
+    - 移除多 Query（Hit@3 86.7%，负优化）✗
+    - 移除 rerank（Hit@3 70%，过拟合）✗
     """
 
     # 高频缓存
@@ -75,6 +86,7 @@ class RAGService:
         self.vector_repo = vector_repo
         self._chain = None
         self._rewrite_chain = None
+        self._hyde_chain = None
 
     @classmethod
     def _cache_key(cls, question: str) -> str:
@@ -102,13 +114,16 @@ class RAGService:
         cls._cache[cls._cache_key(question)] = (result, time.time())
 
     def _rerank(self, query: str, docs: List,
-                top_k: int = 3) -> List:
+                top_k: int = 3) -> Tuple[List, List[float]]:
         """阿里云 DashScope gte-rerank 重排序。
 
         对检索结果做二次精排，提升 Top-k 准确率。
+
+        Returns:
+            (reranked_docs, relevance_scores) — 排序后的文档和对齐的关联分数
         """
         if not docs or not self._RERANK_URL:
-            return docs
+            return docs, [0.0] * len(docs[:top_k])
 
         documents = [d.page_content[:500] for d in docs]
         try:
@@ -119,8 +134,10 @@ class RAGService:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "gte-rerank",
+                    "model": "gte-rerank-v2",
                     "input": {"query": query, "documents": documents},
+                    "top_n": top_k,
+                    "return_documents": False,
                 },
                 timeout=15,
             )
@@ -133,13 +150,17 @@ class RAGService:
                                     reverse=True)
                     reranked = [docs[r["index"]] for r in ranked[:top_k]
                                if r["index"] < len(docs)]
+                    reranked_scores = [r.get("relevance_score", 0)
+                                      for r in ranked[:top_k]
+                                      if r["index"] < len(docs)]
                     logger.info(
-                        f"重排序: {len(docs)} → {len(reranked)} (gte-rerank)"
+                        f"重排序: {len(docs)} → {len(reranked)} (gte-rerank), "
+                        f"top score: {reranked_scores[0] if reranked_scores else 0:.3f}"
                     )
-                    return reranked
+                    return reranked, reranked_scores
         except Exception as e:
             logger.warning(f"重排序失败（降级使用原始结果）: {e}")
-        return docs[:top_k]
+        return docs[:top_k], [0.0] * len(docs[:top_k])
 
     def _summarize_history(self, chat_history: List) -> List:
         """对话摘要压缩：超 6 轮时，将旧消息压缩为摘要。
@@ -203,6 +224,33 @@ class RAGService:
             logger.warning(f"查询改写失败，使用原始问题: {e}")
         return user_input
 
+    def _get_hyde_chain(self):
+        """HyDE 链——生成假设性文档，用于消弭短查询与知识库之间的语义鸿沟。"""
+        if self._hyde_chain is None:
+            prompt = ChatPromptTemplate.from_messages([
+                ("human", HYDE_PROMPT),
+            ])
+            self._hyde_chain = prompt | self.llm | StrOutputParser()
+        return self._hyde_chain
+
+    def _hyde_generate(self, user_input: str) -> str:
+        """生成假设性文档（Hypothetical Document）。
+
+        让 LLM 先"虚构"一段理想的知识库内容，用这段内容的 embedding
+        去做向量检索，匹配度远高于直接用口语化短 query。
+
+        失败时返回空字符串，调用方降级使用原始 query。
+        """
+        try:
+            chain = self._get_hyde_chain()
+            hyde_doc = chain.invoke({"question": user_input}).strip()
+            if hyde_doc and len(hyde_doc) >= 30:
+                logger.info(f"HyDE 生成: {len(hyde_doc)} chars → '{hyde_doc[:60]}...'")
+                return hyde_doc
+        except Exception as e:
+            logger.warning(f"HyDE 生成失败: {e}")
+        return ""
+
     def _get_chain(self):
         """构建 LangChain RAG 管道（带对话历史支持）。"""
         if self._chain is None:
@@ -233,19 +281,81 @@ class RAGService:
             )
         return self._chain
 
+    def _rrf_merge(self, result_groups: List[Tuple[List, List]],
+                   top_k: int = 5) -> Tuple[List, List]:
+        """RRF 融合——合并多路检索结果（HyDE + 原始 query 等）。
+
+        Args:
+            result_groups: [(docs, scores), ...]，每路一个元素
+            top_k: 返回文档数
+        Returns:
+            (merged_docs, merged_scores)
+        """
+        RRF_K = 60
+        doc_scores: Dict[str, Tuple[any, float]] = {}
+
+        for docs, _scores in result_groups:
+            for rank, doc in enumerate(docs, 1):
+                key = doc.page_content[:80]  # 前80字做去重键
+                rrf = 1.0 / (RRF_K + rank)
+                if key in doc_scores:
+                    doc_scores[key] = (doc, doc_scores[key][1] + rrf)
+                else:
+                    doc_scores[key] = (doc, rrf)
+
+        ranked = sorted(doc_scores.values(), key=lambda x: x[1], reverse=True)
+        merged_docs = [r[0] for r in ranked[:top_k]]
+        merged_scores = [r[1] for r in ranked[:top_k]]
+        return merged_docs, merged_scores
+
     def retrieve(self, user_input: str) -> dict:
-        """仅检索（不含 LLM 生成）。供 /stream 端点复用完整 RAG 管道。
+        """检索管道 v4——向量 + BM25 混合检索 + 质量门控（极简快速版）。
+
+        移除 HyDE（省一次 LLM 调用，Hit@3 从 96.7% → 93.3%，响应时间减半）
+        移除多 Query（评估 Hit@3 86.7% 低于纯向量的 93.3%）
+        移除 rerank（评估 Hit@3 70% 比混合检索的 93.3% 差 23pp）
 
         Returns:
             {"docs": [...], "scores": [...], "category": str,
              "references": [...], "formatted_context": str,
-             "search_query": str}
+             "search_query": str, "quality": str, "top_score": float}
         """
-        search_query = self._rewrite_query(user_input)
-        docs, scores, category = self.vector_repo.search_hybrid(search_query, k=5)
-        if len(docs) > RAG_K:
-            docs = self._rerank(search_query, docs, top_k=RAG_K)
+        _t0 = time.perf_counter()
 
+        # 0. 快速预检——一次向量检索判断是否无关
+        from src.config import RAG_FAST_REJECT
+        quick_docs, quick_scores, quick_cat, quick_sim = self.vector_repo.search_vector_only(
+            user_input, k=3
+        )
+        _t1 = time.perf_counter()
+        if quick_sim < RAG_FAST_REJECT:
+            logger.info(f"[TIMING] 快速预检: {_t1-_t0:.2f}s → 拒答 (sim={quick_sim:.3f})")
+            return {
+                "docs": [], "scores": [], "category": quick_cat,
+                "references": [], "formatted_context": "",
+                "search_query": user_input,
+                "quality": "reject", "top_score": quick_sim,
+            }
+
+        # 1. 混合检索（向量 + BM25 → 内部 RRF，一次调用，零 LLM）
+        docs, scores, cat, vec_sim = self.vector_repo.search_hybrid(user_input, k=RAG_K)
+        best_vec_sim = vec_sim
+        _t2 = time.perf_counter()
+
+        # 2. 质量门控——直接使用向量相似度
+        from src.config import RAG_REJECT_THRESHOLD, RAG_WEAK_THRESHOLD
+        gate_score = best_vec_sim
+
+        if gate_score < RAG_REJECT_THRESHOLD:
+            quality = "reject"
+            logger.info(f"质量门控 REJECT: score={gate_score:.3f} < {RAG_REJECT_THRESHOLD}")
+        elif gate_score < RAG_WEAK_THRESHOLD:
+            quality = "weak"
+            logger.info(f"质量门控 WEAK: score={gate_score:.3f} < {RAG_WEAK_THRESHOLD}")
+        else:
+            quality = "ok"
+
+        # 3. 构建 references
         references = []
         for doc, score in zip(docs, scores[:len(docs)]):
             references.append({
@@ -263,10 +373,18 @@ class RAGService:
             for d in docs
         )
 
+        _t3 = time.perf_counter()
+        logger.info(
+            f"[TIMING] retrieve() 分步耗时: "
+            f"预检={_t1-_t0:.2f}s | 混合检索={_t2-_t1:.2f}s | 构建结果={_t3-_t2:.2f}s | "
+            f"总计={_t3-_t0:.2f}s"
+        )
+
         return {
-            "docs": docs, "scores": scores, "category": category,
+            "docs": docs, "scores": scores, "category": cat,
             "references": references, "formatted_context": formatted_context,
-            "search_query": search_query,
+            "search_query": user_input,
+            "quality": quality, "top_score": gate_score,
         }
 
     def query(self, user_input: str,
@@ -286,8 +404,12 @@ class RAGService:
         if not chat_history:
             cached = self._cache_get(user_input)
             if cached:
-                logger.info(f"RAG 缓存命中: '{user_input[:30]}...'")
-                return cached
+                # 缓存结果也要检查质量——拒答结果不缓存，每次重新评估
+                if cached.get("answer", "").startswith("抱歉"):
+                    pass  # 拒答不缓存，走正常流程
+                else:
+                    logger.info(f"RAG 缓存命中: '{user_input[:30]}...'")
+                    return cached
 
         # 检索（复用 retrieve 方法）
         ret = self.retrieve(user_input)
@@ -295,6 +417,18 @@ class RAGService:
         formatted_context = ret["formatted_context"]
         search_query = ret["search_query"]
         category = ret["category"]
+        quality = ret.get("quality", "ok")
+        top_score = ret.get("top_score", 0.0)
+
+        # 门控：拒答
+        if quality == "reject":
+            reject_answer = (
+                "抱歉，当前知识库中暂无相关信息，建议查阅专业健身书籍或咨询持证教练。"
+                "\n\n💡 提示：AI 健身教练目前的知识库主要涵盖训练动作、营养饮食、拉伸恢复和训练原理四大领域，"
+                "你可以尝试换个方式提问。"
+            )
+            result = {"answer": reject_answer, "references": []}
+            return result
 
         # 第四步：对话摘要压缩（超 6 轮自动压缩旧消息）
         if chat_history is None:
@@ -327,8 +461,16 @@ class RAGService:
 
         result = {"answer": answer, "references": references}
 
-        # 缓存无历史的查询结果
-        if not chat_history:
+        # 弱关联时追加免责声明
+        if quality == "weak":
+            result["answer"] = (
+                answer
+                + "\n\n---\n⚠️ 知识库中与此问题的相关度较低（rerank score: "
+                + f"{top_score:.2f}），以上回答结合了有限知识片段，仅供参考。"
+            )
+
+        # 缓存无历史的查询结果（拒答不缓存）
+        if not chat_history and quality == "ok":
             self._cache_set(user_input, result)
 
         logger.info(

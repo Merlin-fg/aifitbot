@@ -13,6 +13,7 @@
             <p style="text-align:center;color:var(--color-text-tertiary);font-size:var(--text-sm);padding:var(--space-8) 0;">加载中...</p>
         </div>
         <div class="sidebar-footer">
+            <a href="/profile">🏋️ 档案</a>
             <a href="/auth/password">改密</a>
             {% if user.role.value == 'admin' %}<a href="/admin/kb">知识库</a>{% endif %}
         </div>
@@ -91,26 +92,37 @@ function renderStreamingUI(question,skipUserMsg){
     messages.appendChild(ai);messages.scrollTop=messages.scrollHeight;
 }
 
-function cleanPlanJson(text) {
-    // Remove STARTJSON...ENDJSON blocks (complete or partial during streaming)
-    text = text.replace(/STARTJSON[\s\S]*?ENDJSON/g, '');
+function renderMarkdownWithPlan(text) {
+    // Hide incomplete STARTJSON block during streaming (no ENDJSON yet)
     var idx = text.indexOf('STARTJSON');
     if (idx !== -1 && text.indexOf('ENDJSON', idx) === -1) {
         text = text.substring(0, idx);
     }
-    // Backward compat: old [PLAN_JSON] markers
-    text = text.replace(/\[PLAN_JSON\][\s\S]*?\[\/PLAN_JSON\]/g, '');
-    idx = text.indexOf('[PLAN_JSON]');
-    if (idx !== -1 && text.indexOf('[/PLAN_JSON]', idx) === -1) {
-        text = text.substring(0, idx);
-    }
-    return text;
+    // Extract complete STARTJSON...ENDJSON blocks, render as plan cards
+    var planHtml = '';
+    text = text.replace(/STARTJSON\s*([\s\S]*?)\s*ENDJSON/g, function(match, jsonStr) {
+        try {
+            var plan = JSON.parse(jsonStr.trim());
+            if (plan.plan_name && plan.exercises) {
+                planHtml += '<div class="plan-card"><div class="plan-card-title">📋 '+escapeHtml(plan.plan_name)+'</div>';
+                plan.exercises.forEach(function(ex, i) {
+                    planHtml += '<div class="plan-exercise"><span class="plan-ex-num">'+(i+1)+'</span><span class="plan-ex-name">'+escapeHtml(ex.name)+'</span><span class="plan-ex-detail">'+escapeHtml(ex.sets||'')+'组 × '+escapeHtml(ex.reps||'')+' | 休息'+escapeHtml(ex.rest_sec||'')+'s</span>';
+                    if(ex.notes) planHtml += '<div class="plan-ex-notes">💡 '+escapeHtml(ex.notes)+'</div>';
+                    planHtml += '</div>';
+                });
+                planHtml += '</div>';
+            }
+        } catch(e) {}
+        return ''; // Remove raw JSON from display
+    });
+    // Render remaining markdown
+    var html = typeof marked !== 'undefined' ? marked.parse(text) : escapeHtml(text).replace(/\n/g,'<br>');
+    return html + planHtml;
 }
 
 function updateStreamingDOM(){
     const ai=document.getElementById('streaming-response');if(!ai)return;
-    let displayText = cleanPlanJson(streamFullAnswer);
-    let h = typeof marked !== 'undefined' ? marked.parse(displayText) : escapeHtml(displayText).replace(/\n/g,'<br>');
+    let h = renderMarkdownWithPlan(streamFullAnswer);
     if(streamReferences?.length){h+='<details class="references-box"><summary>引用来源（'+streamReferences.length+' 条）</summary>';streamReferences.forEach((r,i)=>{h+='<div style="font-size:.78rem;margin-top:4px;"><span style="font-weight:600;">['+(i+1)+'] '+escapeHtml(r.source)+'</span> <span style="color:var(--c-text3);">(相似度:'+r.score+')</span><p style="color:var(--c-text2);">'+escapeHtml(r.content)+'...</p></div>';});h+='</details>';}
     ai.innerHTML=h+'<span class="typing-cursor"></span>';
     const mc=document.getElementById('chat-messages');if(mc.scrollHeight-mc.scrollTop-mc.clientHeight<80)mc.scrollTop=mc.scrollHeight;
@@ -132,8 +144,8 @@ async function switchSession(sid,el){
     // Render markdown for loaded messages (innerHTML won't execute inline scripts)
     document.querySelectorAll('.msg-src').forEach(function(s){
         var div=s.closest('.message-assistant'), refs=div.querySelector('.references-box');
-        var raw=cleanPlanJson(s.textContent.trim());
-        var html=typeof marked!=='undefined'?marked.parse(raw):raw.replace(/\n/g,'<br>');
+        var raw=s.textContent.trim();
+        var html=renderMarkdownWithPlan(raw);
         div.querySelector('.msg-body').innerHTML=html;
         if(refs)div.appendChild(refs);
         s.remove();

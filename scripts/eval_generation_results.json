@@ -1,0 +1,220 @@
+{
+  "summary": {
+    "faithfulness": 0.8666666666666667,
+    "answer_relevancy": 0.9116666666666667,
+    "context_precision": 0.8266666666666667,
+    "context_recall": 0.7333333333333333
+  },
+  "per_query": [
+    {
+      "question": "杠铃卧推的标准动作怎么做",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.8,
+      "context_recall": 0.8
+    },
+    {
+      "question": "怎么练出腹肌",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0,
+      "context_recall": 0.4
+    },
+    {
+      "question": "深蹲的标准动作要领",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9,
+      "context_precision": 0.9,
+      "context_recall": 0.8
+    },
+    {
+      "question": "练背最好的动作有哪些",
+      "faithfulness": 0.2,
+      "answer_relevancy": 0.2,
+      "context_precision": 0.3,
+      "context_recall": 0.4
+    },
+    {
+      "question": "哑铃侧平举怎么练才有效",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.7,
+      "context_recall": 1.0
+    },
+    {
+      "question": "硬拉有哪几种各练什么部位",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9,
+      "context_precision": 0.7,
+      "context_recall": 0.8
+    },
+    {
+      "question": "怎么练二头肌",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0,
+      "context_recall": 0.6
+    },
+    {
+      "question": "弓箭步怎么做才标准",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9,
+      "context_precision": 0.7,
+      "context_recall": 0.8
+    },
+    {
+      "question": "怎么练三角肌后束",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 1.0
+    },
+    {
+      "question": "新手减脂期怎么安排饮食",
+      "faithfulness": 0.95,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 0.7
+    },
+    {
+      "question": "蛋白粉什么时候喝效果最好",
+      "faithfulness": 0.9,
+      "answer_relevancy": 0.9,
+      "context_precision": 0.9,
+      "context_recall": 0.8
+    },
+    {
+      "question": "肌酸怎么吃有什么效果",
+      "faithfulness": 0.9,
+      "answer_relevancy": 0.95,
+      "context_precision": 0.9,
+      "context_recall": 1.0
+    },
+    {
+      "question": "减脂期怎么吃才能不流失肌肉",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0,
+      "context_recall": 0.8
+    },
+    {
+      "question": "碳水循环怎么操作",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 0.8
+    },
+    {
+      "question": "素食健身者怎么补充蛋白质",
+      "faithfulness": 0.95,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 0.9
+    },
+    {
+      "question": "增肌期每天应该吃多少热量",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9,
+      "context_precision": 1.0,
+      "context_recall": 0.8
+    },
+    {
+      "question": "新手一周练几次比较合适",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 0.8
+    },
+    {
+      "question": "怎么突破增肌平台期",
+      "faithfulness": 0.85,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 1.0
+    },
+    {
+      "question": "训练后肌肉酸痛怎么快速恢复",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 0.7
+    },
+    {
+      "question": "女生练力量会变壮吗",
+      "faithfulness": 0.85,
+      "answer_relevancy": 0.85,
+      "context_precision": 1.0,
+      "context_recall": 0.9
+    },
+    {
+      "question": "减脂和增肌可以同时进行吗",
+      "faithfulness": 0.85,
+      "answer_relevancy": 0.9,
+      "context_precision": 0.8,
+      "context_recall": 0.3
+    },
+    {
+      "question": "训练计划怎么设计",
+      "faithfulness": 0.85,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0,
+      "context_recall": 0.8
+    },
+    {
+      "question": "HIIT是什么怎么安排",
+      "faithfulness": 0.85,
+      "answer_relevancy": 0.9,
+      "context_precision": 0.8,
+      "context_recall": 0.8
+    },
+    {
+      "question": "深蹲时膝盖疼怎么办",
+      "faithfulness": 0.5,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.8,
+      "context_recall": 0.5
+    },
+    {
+      "question": "训练前后拉伸有什么区别",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.9,
+      "context_recall": 1.0
+    },
+    {
+      "question": "泡沫轴怎么用有什么好处",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    {
+      "question": "睡眠不好会影响增肌吗",
+      "faithfulness": 0.9,
+      "answer_relevancy": 1.0,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    {
+      "question": "训练后多久可以洗澡",
+      "faithfulness": 0.85,
+      "answer_relevancy": 0.85,
+      "context_precision": 0.8,
+      "context_recall": 0.6
+    },
+    {
+      "question": "胸椎活动度差怎么改善",
+      "faithfulness": 0.2,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.5,
+      "context_recall": 0.2
+    },
+    {
+      "question": "增肌期怎么安排饮食和训练",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.2,
+      "context_precision": 0.0,
+      "context_recall": 0.0
+    }
+  ]
+}

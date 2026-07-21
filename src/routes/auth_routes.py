@@ -72,3 +72,36 @@ def change_password(
         raise HTTPException(status_code=400, detail=msg)
 
     return {"message": msg}
+
+
+@router.put("/profile")
+def update_profile(
+    age: int = Form(None),
+    gender: str = Form(None),
+    height_cm: int = Form(None),
+    weight_kg: float = Form(None),
+    goal: str = Form(None),
+    equipment: str = Form(None),
+    injuries: str = Form(None),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """更新用户健身档案。"""
+    if age is not None:
+        user.age = age
+    if gender is not None:
+        user.gender = gender
+    if height_cm is not None:
+        user.height_cm = height_cm
+    if weight_kg is not None:
+        user.weight_kg = weight_kg
+    if goal is not None:
+        user.goal = goal
+    if equipment is not None:
+        user.equipment = equipment
+    if injuries is not None:
+        user.injuries = injuries
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return {"message": "档案已更新", "profile": user.to_profile_text()}

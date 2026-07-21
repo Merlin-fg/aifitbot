@@ -303,11 +303,6 @@ async def chat_stream(
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
 
-    # 使用完整 RAG 管道检索（查询改写 + 混合检索 + 重排序）
-    ret = rag.retrieve(question)
-    references = ret["references"]
-    kb_context = ret["formatted_context"] or "（知识库中暂无相关内容）"
-
     from src.services.rag_service import SYSTEM_PROMPT
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -321,11 +316,55 @@ async def chat_stream(
     profile_block = f"\n\n## 用户档案\n{user.to_profile_text()}" if user.to_profile_text() else ""
 
     async def generate():
+        import asyncio
+        import time as _time
+        _t_request = _time.perf_counter()
         full_answer = ""
+        # Immediately send a thinking event so the browser knows the stream is alive
+        yield f"data: {json.dumps({'type': 'thinking', 'text': '检索知识库中...'})}\n\n"
+
+        # Run retrieval in thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        ret = await loop.run_in_executor(None, rag.retrieve, question)
+        _t_retrieval_done = _time.perf_counter()
+        references = ret["references"]
+        kb_context = ret["formatted_context"] or "（知识库中暂无相关内容）"
+        quality = ret.get("quality", "ok")
+        top_score = ret.get("top_score", 0.0)
+
         yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+
+        # 质量门控：拒答
+        if quality == "reject":
+            reject_msg = (
+                "抱歉，当前知识库中暂无相关信息，建议查阅专业健身书籍或咨询持证教练。"
+                "\n\n💡 提示：AI 健身教练目前的知识库主要涵盖训练动作、营养饮食、拉伸恢复和训练原理四大领域，"
+                "你可以尝试换个方式提问。"
+            )
+            for ch in reject_msg:
+                full_answer += ch
+                yield f"data: {json.dumps({'type': 'token', 'text': ch})}\n\n"
+            yield f"data: {json.dumps({'type': 'references', 'refs': []})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            # 保存消息
+            try:
+                from src.database import Session as NewDbSession
+                with NewDbSession(engine) as save_db:
+                    save_repo = MessageRepository(save_db)
+                    save_repo.create(session_id, "assistant", full_answer, None)
+                    s = save_db.get(SessionModel, session_id)
+                    if s:
+                        s.updated_at = datetime.now(timezone.utc)
+                        save_db.add(s)
+                        save_db.commit()
+            except Exception as e:
+                logger.error(f"保存消息失败: {e}")
+            return
 
         try:
             chain = prompt | llm
+            _t_prompt_ready = _time.perf_counter()
+            _first_token = None
             async for chunk in chain.astream({
                 "context": kb_context,
                 "input": question,
@@ -334,8 +373,33 @@ async def chat_stream(
             }):
                 token = chunk.content if hasattr(chunk, 'content') else str(chunk)
                 if token:
+                    if _first_token is None:
+                        _first_token = _time.perf_counter()
                     full_answer += token
                     yield f"data: {json.dumps({'type': 'token', 'text': token})}\n\n"
+
+            _t_generation_done = _time.perf_counter()
+            _t_first = _first_token - _t_prompt_ready if _first_token else 0
+            _t_gen = _t_generation_done - _first_token if _first_token else _t_generation_done - _t_prompt_ready
+            _t_total = _t_generation_done - _t_request
+            logger.info(
+                f"[TIMING] generate() 分步耗时: "
+                f"请求→检索完成={_t_retrieval_done-_t_request:.2f}s | "
+                f"检索→Prompt就绪={_t_prompt_ready-_t_retrieval_done:.2f}s | "
+                f"Prompt→首Token={_t_first:.2f}s | "
+                f"首Token→生成结束={_t_gen:.2f}s ({len(full_answer)} chars) | "
+                f"总计={_t_total:.2f}s"
+            )
+
+            # 弱关联时追加免责
+            if quality == "weak":
+                disclaimer = (
+                    f"\n\n---\n⚠️ 知识库中与此问题的相关度较低（rerank score: {top_score:.2f}），"
+                    "以上回答结合了有限知识片段，仅供参考。"
+                )
+                for ch in disclaimer:
+                    full_answer += ch
+                    yield f"data: {json.dumps({'type': 'token', 'text': ch})}\n\n"
 
             yield f"data: {json.dumps({'type': 'references', 'refs': references})}\n\n"
 

@@ -1,5 +1,7 @@
-"""向量数据库仓库——多 collection + BM25 混合召回 + RRF 融合。"""
+"""向量数据库仓库——多 collection + BM25 混合召回 + RRF 融合 + 父子切割。"""
 
+import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -96,6 +98,10 @@ class VectorRepository:
         self._bm25: Dict[str, Tuple[BM25Okapi, List[LCDocument]]] = {}
         # 文档内容缓存：collection_name → List[str]
         self._doc_texts: Dict[str, List[str]] = {}
+        # 父子切割：parent_id → {"content": str, "metadata": dict}
+        self._parents_file = os.path.join(self.persist_dir, "parents.json")
+        self._parents: Dict[str, dict] = {}
+        self._load_parents()
 
     def _get_store(self, collection_name: str = "aifitbot_general") -> Chroma:
         key = collection_name
@@ -108,6 +114,25 @@ class VectorRepository:
             )
         return self._stores[key]
 
+    def _load_parents(self):
+        """从磁盘加载父块映射。"""
+        if os.path.exists(self._parents_file):
+            try:
+                with open(self._parents_file, "r", encoding="utf-8") as f:
+                    self._parents = json.load(f)
+            except Exception as e:
+                logger.warning(f"加载 parents.json 失败: {e}")
+                self._parents = {}
+
+    def _save_parents(self):
+        """持久化父块映射到磁盘。"""
+        try:
+            os.makedirs(self.persist_dir, exist_ok=True)
+            with open(self._parents_file, "w", encoding="utf-8") as f:
+                json.dump(self._parents, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存 parents.json 失败: {e}")
+
     # ================================================================
     # 文档加载与语义分片
     # ================================================================
@@ -118,10 +143,20 @@ class VectorRepository:
             return PyPDFLoader(file_path).load()
         return TextLoader(file_path, encoding="utf-8").load()
 
-    def _semantic_split(self, docs: List[LCDocument]) -> List[LCDocument]:
-        result = []
-        fallback_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500, chunk_overlap=50,
+    def _semantic_split(self, docs: List[LCDocument]) -> Tuple[List[LCDocument], Dict[str, dict]]:
+        """父子切割——子块 300 字做检索匹配，父块保留完整章节喂 LLM。
+
+        每个 ## 章节 = 一个父块。父块 ≤300 字的直接复用为子块，
+        超过 300 字的用 RecursiveCharacterTextSplitter 切分为多个子块。
+        所有子块带 parent_id 元数据指向父块。
+
+        Returns:
+            (children, parents): children 存入 ChromaDB 做索引，parents 持久化到磁盘
+        """
+        children = []
+        parents = {}
+        child_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=300, chunk_overlap=30,
             separators=["\n\n", "\n", "。", "！", "？", "；", " "],
         )
         for doc in docs:
@@ -135,20 +170,40 @@ class VectorRepository:
                 tags = self._extract_tags(section)
                 title_match = re.match(r'^## (.+)', section)
                 section_title = title_match.group(1).strip() if title_match else ""
-                if len(section) <= 500:
-                    result.append(LCDocument(
+                # 用内容前 100 字 + 标题的 hash 做 parent_id
+                pid_key = (section_title + section[:100]).encode("utf-8")
+                parent_id = hashlib.md5(pid_key).hexdigest()[:12]
+
+                # 父块：完整章节
+                parents[parent_id] = {
+                    "content": section,
+                    "metadata": {"source": source, "title": section_title, "tags": tags},
+                }
+
+                # 子块：检索用
+                if len(section) <= 300:
+                    children.append(LCDocument(
                         page_content=section,
-                        metadata={"source": source, "title": section_title, "tags": tags}
+                        metadata={
+                            "source": source, "title": section_title, "tags": tags,
+                            "parent_id": parent_id,
+                        }
                     ))
                 else:
-                    sub_docs = fallback_splitter.split_text(section)
-                    for sd in sub_docs:
-                        result.append(LCDocument(
+                    sub_texts = child_splitter.split_text(section)
+                    for sd in sub_texts:
+                        children.append(LCDocument(
                             page_content=sd,
-                            metadata={"source": source, "title": section_title, "tags": tags}
+                            metadata={
+                                "source": source, "title": section_title, "tags": tags,
+                                "parent_id": parent_id,
+                            }
                         ))
-        logger.info(f"语义分片: {len(docs)} 个源文档 → {len(result)} 个知识块")
-        return result
+        logger.info(
+            f"父子切割: {len(docs)} 源文档 → "
+            f"{len(children)} 子块(检索用) + {len(parents)} 父块(喂LLM用)"
+        )
+        return children, parents
 
     def _extract_tags(self, text: str) -> str:
         match = re.search(r'标签:\s*(.+)', text)
@@ -211,6 +266,29 @@ class VectorRepository:
             self._build_bm25(collection_name)
         return self._bm25.get(collection_name, (None, []))
 
+    def _resolve_parents(self, docs: List[LCDocument]) -> List[LCDocument]:
+        """子块 → 父块替换，去重。检索用子块，喂 LLM 用父块完整章节。"""
+        if not self._parents:
+            return docs
+        seen: set = set()
+        resolved = []
+        for doc in docs:
+            pid = doc.metadata.get("parent_id")
+            if pid and pid in self._parents:
+                if pid not in seen:
+                    seen.add(pid)
+                    parent = self._parents[pid]
+                    resolved.append(LCDocument(
+                        page_content=parent["content"],
+                        metadata={**doc.metadata, **parent["metadata"]},
+                    ))
+            else:
+                key = doc.page_content[:80]
+                if key not in seen:
+                    seen.add(key)
+                    resolved.append(doc)
+        return resolved
+
     # ================================================================
     # 混合检索 + RRF 融合
     # ================================================================
@@ -239,21 +317,28 @@ class VectorRepository:
         ranked = sorted(scores.values(), key=lambda x: x[1], reverse=True)
         return ranked[:k]
 
-    def search_hybrid(self, query: str, k: int = 5) -> Tuple[List[LCDocument], List[float], str]:
+    def search_hybrid(self, query: str, k: int = 5) -> Tuple[List[LCDocument], List[float], str, float]:
         """混合检索：向量 + BM25 → RRF 融合。
 
         先检索 k*2 条候选，融合后取 top-k 返回。
 
         Returns:
-            (documents, scores, category_used)
+            (documents, scores, category_used, max_vector_similarity)
         """
         category = self._classify_query(query)
         coll_name = COLLECTION_MAP.get(category, "aifitbot_general")
 
         # 1. 向量检索（取 2k 候选）
         store = self._get_store(coll_name)
+        vec_raw = []
+        max_vec_sim = 0.0
         try:
             vec_raw = store.similarity_search_with_score(query, k=k * 2)
+            # ChromaDB L2 distance: smaller = more similar
+            # For normalized embeddings: L2² = 2 - 2·cos_sim → cos_sim = 1 - L2²/2
+            if vec_raw:
+                min_dist = min(s for _, s in vec_raw)
+                max_vec_sim = max(0.0, 1.0 - min_dist / 2.0)
         except Exception:
             vec_raw = []
 
@@ -283,7 +368,27 @@ class VectorRepository:
 
         docs = [m[0] for m in merged]
         scores = [m[1] for m in merged]
-        return docs, scores, category
+        # 子块 → 父块替换
+        docs = self._resolve_parents(docs)
+        return docs, scores, category, max_vec_sim
+
+    def search_vector_only(self, query: str, k: int = 3) -> Tuple[List[LCDocument], List[float], str, float]:
+        """纯向量检索（不含 BM25）。供 HyDE 使用——长文本不适用 BM25。"""
+        category = self._classify_query(query)
+        coll_name = COLLECTION_MAP.get(category, "aifitbot_general")
+        store = self._get_store(coll_name)
+        max_vec_sim = 0.0
+        try:
+            vec_raw = store.similarity_search_with_score(query, k=k)
+            if vec_raw:
+                min_dist = min(s for _, s in vec_raw)
+                max_vec_sim = max(0.0, 1.0 - min_dist / 2.0)
+                docs = self._resolve_parents([d for d, _ in vec_raw])
+                scores = [s for _, s in vec_raw[:len(docs)]]
+                return docs, scores, category, max_vec_sim
+        except Exception as e:
+            logger.warning(f"纯向量检索失败: {e}")
+        return [], [], category, 0.0
 
     # ================================================================
     # 公开接口
@@ -296,36 +401,47 @@ class VectorRepository:
         for doc in raw_docs:
             doc.metadata["source"] = source_name
 
-        chunks = self._semantic_split(raw_docs)
+        children, parents = self._semantic_split(raw_docs)
+        self._parents.update(parents)
+        self._save_parents()
         category = self._classify_file(display_name or stored_name)
 
         coll_name = COLLECTION_MAP.get(category, "aifitbot_general")
         store = self._get_store(coll_name)
-        store.add_documents(chunks)
+        store.add_documents(children)
 
         # 同时存入 general
         if category in COLLECTION_MAP:
-            self._get_store("aifitbot_general").add_documents(chunks)
+            self._get_store("aifitbot_general").add_documents(children)
 
         # 清除对应 BM25 缓存，下次查询时重建
         self._bm25.pop(coll_name, None)
         if category in COLLECTION_MAP:
             self._bm25.pop("aifitbot_general", None)
 
-        logger.info(f"文档 {stored_name} → {category} 库, {len(chunks)} 块")
-        return len(chunks)
+        logger.info(f"文档 {stored_name} → {category} 库, {len(children)} 子块")
+        return len(children)
 
     def remove_document(self, stored_name: str) -> bool:
+        source = stored_name
         for coll_name in list(COLLECTION_MAP.values()) + ["aifitbot_general"]:
             try:
                 store = self._get_store(coll_name)
                 collection = store._collection
-                results = collection.get(where={"source": stored_name})
+                results = collection.get(where={"source": source})
                 ids = results.get("ids", [])
                 if ids:
                     collection.delete(ids=ids)
             except Exception as e:
-                logger.warning(f"删除 {coll_name} 中 {stored_name} 失败: {e}")
+                logger.warning(f"删除 {coll_name} 中 {source} 失败: {e}")
+        # 清除 parents 中匹配 source 的条目
+        before = len(self._parents)
+        self._parents = {
+            k: v for k, v in self._parents.items()
+            if v.get("metadata", {}).get("source") != source
+        }
+        if len(self._parents) < before:
+            self._save_parents()
         # 清除所有 BM25 缓存
         self._bm25.clear()
         return True
@@ -338,14 +454,37 @@ class VectorRepository:
         except OSError as e:
             logger.warning(f"文件删除失败: {file_path}, {e}")
 
-    def search(self, query: str, k: int = 3) -> tuple[List[LCDocument], List[float], str]:
+    def search(self, query: str, k: int = 3) -> tuple[List[LCDocument], List[float], str, float]:
         """纯向量检索（兼容旧接口）。"""
         return self.search_hybrid(query, k=k)
 
     def as_retriever(self, k: int = 3):
         return self._get_store("aifitbot_general").as_retriever(search_kwargs={"k": k})
 
-    def reload(self):
+    def rebuild_all(self) -> int:
+        """重建知识库——清空所有 collection，重新从 data/ 加载并切割。"""
+        import glob
+        # 清空所有 collection
+        for coll_name in list(COLLECTION_MAP.values()) + ["aifitbot_general"]:
+            try:
+                store = self._get_store(coll_name)
+                ids = store._collection.get().get("ids", [])
+                if ids:
+                    store._collection.delete(ids=ids)
+            except Exception as e:
+                logger.warning(f"清空 collection {coll_name} 失败: {e}")
+        # 重置状态
         self._stores.clear()
         self._bm25.clear()
         self._doc_texts.clear()
+        self._parents.clear()
+        # 重新加载所有文档
+        total = 0
+        patterns = ["**/*.md", "**/*.txt", "**/*.pdf"]
+        for pattern in patterns:
+            for file_path in glob.glob(os.path.join(self.data_dir, pattern), recursive=True):
+                name = os.path.basename(file_path)
+                count = self.add_document(name, name)
+                total += count
+        logger.info(f"知识库重建完成: {total} 子块, {len(self._parents)} 父块")
+        return total

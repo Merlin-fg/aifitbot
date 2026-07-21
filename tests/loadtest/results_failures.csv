@@ -1,0 +1,4 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/chat/send [RAG],CatchResponseError('Timeout: 95.6s'),2,2026-07-21T11:21:52Z,2026-07-21T11:21:52Z
+POST,/chat/session/new,CatchResponseError('Status 0'),1,2026-07-21T11:21:52Z,2026-07-21T11:21:52Z
+POST,/chat/send [RAG],CatchResponseError('Timeout: 96.6s'),1,2026-07-21T11:21:52Z,2026-07-21T11:21:52Z
