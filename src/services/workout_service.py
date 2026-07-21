@@ -54,27 +54,13 @@ class WorkoutService:
 
     def _extract_json(self, text: str) -> Optional[dict]:
         """从文本中提取 JSON 训练计划。"""
-        # STARTJSON...ENDJSON 标记格式（v2）
-        match = re.search(r'STARTJSON\s*\n([\s\S]*?)\n\s*ENDJSON', text)
+        # STARTJSON...ENDJSON 标记格式（v2，不限是否跨行）
+        match = re.search(r'STARTJSON\s*([\s\S]*?)\s*ENDJSON', text)
         if match:
             try:
                 return json.loads(match.group(1).strip())
             except json.JSONDecodeError:
                 pass
-        # 向下兼容旧格式
-        for pattern in [
-            r'\[PLAN_JSON\]\s*([\s\S]*?)\s*\[/PLAN_JSON\]',
-            r'<!--PLAN_JSON\s*([\s\S]*?)\s*-->',
-            r'```json\s*([\s\S]*?)```',
-        ]:
-            match = re.search(pattern, text)
-            if match:
-                try:
-                    return json.loads(match.group(1).strip())
-                except json.JSONDecodeError:
-                    pass
-                else:
-                    break
         return None
 
     def get_today_data(self, user_id: int) -> dict:

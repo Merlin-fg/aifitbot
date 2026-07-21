@@ -290,47 +290,23 @@ async def chat_stream(
                      "X-Accel-Buffering": "no"}
         )
 
-    # === 正常流式 RAG ===
+    # === 正常流式 RAG（使用完整 RAG 管道检索） ===
     history_msgs = msg_repo.get_by_session(session_id, limit=13)
     chat_history: List = []
-    history_text = ""
     for m in history_msgs[:-1]:
         if m.role == "user":
             chat_history.append(HumanMessage(content=m.content))
-            history_text += f"用户：{m.content}\n"
         else:
             chat_history.append(AIMessage(content=m.content))
-            history_text += f"教练：{m.content}\n"
-
-    full_question = question
-    search_query = f"对话历史：\n{history_text}\n用户最新问题：{question}" if history_text.strip() else question
 
     if sess.title == "新对话":
         new_title = question[:30] + ("..." if len(question) > 30 else "")
         sess_repo.update_title(session_id, new_title)
 
-    try:
-        docs, scores, category = rag.vector_repo.search(search_query, k=3)
-        docs_with_scores = list(zip(docs, scores))
-    except Exception:
-        docs, scores, docs_with_scores = [], [], []
-
-    references = []
-    for doc, score in docs_with_scores:
-        references.append({
-            "source": doc.metadata.get("source", "未知"),
-            "content": doc.page_content[:300],
-            "score": round(float(score), 4),
-        })
-
-    context_parts = []
-    for d, _ in docs_with_scores:
-        context_parts.append(
-            f"[来源: {d.metadata.get('source', '未知')}]\n{d.page_content}"
-        )
-    kb_context = "\n\n---\n\n".join(context_parts)
-    if not kb_context:
-        kb_context = "（知识库中暂无相关内容）"
+    # 使用完整 RAG 管道检索（查询改写 + 混合检索 + 重排序）
+    ret = rag.retrieve(question)
+    references = ret["references"]
+    kb_context = ret["formatted_context"] or "（知识库中暂无相关内容）"
 
     from src.services.rag_service import SYSTEM_PROMPT
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder

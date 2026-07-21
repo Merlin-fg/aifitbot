@@ -233,6 +233,42 @@ class RAGService:
             )
         return self._chain
 
+    def retrieve(self, user_input: str) -> dict:
+        """仅检索（不含 LLM 生成）。供 /stream 端点复用完整 RAG 管道。
+
+        Returns:
+            {"docs": [...], "scores": [...], "category": str,
+             "references": [...], "formatted_context": str,
+             "search_query": str}
+        """
+        search_query = self._rewrite_query(user_input)
+        docs, scores, category = self.vector_repo.search_hybrid(search_query, k=5)
+        if len(docs) > RAG_K:
+            docs = self._rerank(search_query, docs, top_k=RAG_K)
+
+        references = []
+        for doc, score in zip(docs, scores[:len(docs)]):
+            references.append({
+                "source": doc.metadata.get("source", "未知"),
+                "title": doc.metadata.get("title", ""),
+                "content": doc.page_content[:RAG_MAX_CHUNK],
+                "score": round(float(score), 4),
+                "tags": doc.metadata.get("tags", ""),
+            })
+
+        formatted_context = "\n\n---\n\n".join(
+            f"[来源: {d.metadata.get('source', '未知')}]\n"
+            f"[标题: {d.metadata.get('title', '')}]\n"
+            f"{d.page_content}"
+            for d in docs
+        )
+
+        return {
+            "docs": docs, "scores": scores, "category": category,
+            "references": references, "formatted_context": formatted_context,
+            "search_query": search_query,
+        }
+
     def query(self, user_input: str,
               chat_history: Optional[List] = None,
               profile_text: str = "") -> dict:
@@ -253,28 +289,12 @@ class RAGService:
                 logger.info(f"RAG 缓存命中: '{user_input[:30]}...'")
                 return cached
 
-        # 第一步：查询改写
-        search_query = self._rewrite_query(user_input)
-
-        # 第二步：混合检索（BM25 + 向量 → RRF 融合，取 5 条候选）
-        docs, scores, category = self.vector_repo.search_hybrid(search_query, k=5)
-
-        # 第三步：重排序（gte-rerank 精排 → top 3）
-        if len(docs) > RAG_K:
-            docs = self._rerank(search_query, docs, top_k=RAG_K)
-
-        # 构建引用列表
-        references = []
-        context_docs = []
-        for doc, score in zip(docs, scores[:len(docs)]):
-            references.append({
-                "source": doc.metadata.get("source", "未知"),
-                "title": doc.metadata.get("title", ""),
-                "content": doc.page_content[:RAG_MAX_CHUNK],
-                "score": round(float(score), 4),
-                "tags": doc.metadata.get("tags", ""),
-            })
-            context_docs.append(doc)
+        # 检索（复用 retrieve 方法）
+        ret = self.retrieve(user_input)
+        references = ret["references"]
+        formatted_context = ret["formatted_context"]
+        search_query = ret["search_query"]
+        category = ret["category"]
 
         # 第四步：对话摘要压缩（超 6 轮自动压缩旧消息）
         if chat_history is None:
@@ -285,14 +305,8 @@ class RAGService:
         # 构建档案文本
         profile_block = f"\n\n## 用户档案\n{profile_text}" if profile_text else ""
 
-        # 第五步：构建上下文并生成回答
+        # 第五步：生成回答
         chain = self._get_chain()
-        formatted_context = "\n\n---\n\n".join(
-            f"[来源: {d.metadata.get('source', '未知')}]\n"
-            f"[标题: {d.metadata.get('title', '')}]\n"
-            f"{d.page_content}"
-            for d in context_docs
-        )
 
         try:
             answer = chain.invoke({

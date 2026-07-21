@@ -1,6 +1,6 @@
 """训练打卡数据访问层。"""
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional, List
 
 from sqlmodel import Session, select, func
@@ -65,15 +65,12 @@ class WorkoutRepository:
         ex = self.get_exercise(exercise_id)
         if not ex:
             return False
+        # 验证 exercise 所属 plan 的 owner
+        plan = self.get_plan(ex.plan_id)
+        if not plan or plan.user_id != user_id:
+            return False
         if ex.completed:
             ex.completed = False
-            # 删除打卡记录
-            self.session.exec(
-                select(CheckIn).where(
-                    CheckIn.exercise_id == exercise_id,
-                    CheckIn.user_id == user_id,
-                )
-            )
             ci = self.session.exec(
                 select(CheckIn).where(
                     CheckIn.exercise_id == exercise_id,
@@ -112,7 +109,7 @@ class WorkoutRepository:
 
     def get_checkin_dates(self, user_id: int, days: int = 90) -> List[date]:
         """获取最近 N 天有打卡的日期列表。"""
-        since = datetime.now() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         results = self.session.exec(
             select(CheckIn.completed_at)
             .where(CheckIn.user_id == user_id, CheckIn.completed_at >= since)
@@ -123,7 +120,7 @@ class WorkoutRepository:
         """获取近 4 周每周总训练组数。"""
         stats = []
         for week_offset in range(3, -1, -1):
-            end = datetime.now() - timedelta(weeks=week_offset)
+            end = datetime.now(timezone.utc) - timedelta(weeks=week_offset)
             start = end - timedelta(weeks=1)
             count = self.session.exec(
                 select(func.count(CheckIn.id))
@@ -141,7 +138,7 @@ class WorkoutRepository:
 
     def get_body_part_distribution(self, user_id: int) -> List[dict]:
         """获取本周训练部位分布（从打卡记录的动作名称推断）。"""
-        since = datetime.now() - timedelta(days=7)
+        since = datetime.now(timezone.utc) - timedelta(days=7)
         results = self.session.exec(
             select(WorkoutExercise.name)
             .join(CheckIn, CheckIn.exercise_id == WorkoutExercise.id)
