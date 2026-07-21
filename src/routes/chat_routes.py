@@ -57,7 +57,7 @@ def try_import_workout(question: str, session_id: int, user_id: int,
 
 
 # ================================================================
-# 会话管理 API
+# 会话 CRUD 端点
 # ================================================================
 
 @router.post("/session/new")
@@ -66,6 +66,7 @@ def session_new(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
+    """创建新会话，返回 session_id 和 title。"""
     repo = SessionRepository(db)
     sess = repo.create(user.id, title)
     return {"session_id": sess.id, "title": sess.title}
@@ -77,6 +78,7 @@ async def session_list(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
+    """获取当前用户的会话列表，渲染为 HTML 片段供 HTMX 更新侧边栏。"""
     repo = SessionRepository(db)
     sessions = repo.get_by_user(user.id)
     return templates.TemplateResponse(
@@ -92,6 +94,7 @@ def session_rename(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
+    """重命名指定会话（需为会话所有者）。"""
     repo = SessionRepository(db)
     sess = repo.get_by_id(session_id)
     if not sess or sess.user_id != user.id:
@@ -106,6 +109,7 @@ def session_delete(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
+    """删除指定会话及其所有消息（需为会话所有者）。"""
     repo = SessionRepository(db)
     sess = repo.get_by_id(session_id)
     if not sess or sess.user_id != user.id:
@@ -127,6 +131,7 @@ async def load_messages(
     user: User = Depends(get_current_user),
     db: DbSession = Depends(get_session),
 ):
+    """加载指定会话历史消息，渲染为 HTML 片段。仅会话所有者可访问。"""
     sess_repo = SessionRepository(db)
     sess = sess_repo.get_by_id(session_id)
     if not sess or sess.user_id != user.id:
@@ -157,6 +162,11 @@ async def chat_send(
     db: DbSession = Depends(get_session),
     rag: RAGService = Depends(get_rag_service),
 ):
+    """非流式对话接口（HTMX 回退路径）。
+
+    同步调用 rag.query() 获取完整回答，返回预渲染 HTML 片段。
+    包含打卡确认拦截：若检测到用户回复"需要"等确认词，自动导入训练计划。
+    """
     safe_question = html.escape(question)
 
     # 获取或创建会话
@@ -257,6 +267,14 @@ async def chat_stream(
     db: DbSession = Depends(get_session),
     rag: RAGService = Depends(get_rag_service),
 ):
+    """流式对话接口（SSE），主要交互路径。
+
+    流程：创建/获取会话 → 保存用户消息 → 打卡确认拦截 →
+    generate() 异步生成器逐 token 推送 SSE 事件 →
+    前端实时渲染 Markdown + 训练计划卡片。
+
+    SSE 事件类型：thinking | session | token | references | error | done
+    """
     # 获取或创建会话
     sess_repo = SessionRepository(db)
     if session_id:
@@ -316,11 +334,21 @@ async def chat_stream(
     profile_block = f"\n\n## 用户档案\n{user.to_profile_text()}" if user.to_profile_text() else ""
 
     async def generate():
+        """SSE 异步生成器——检索 + 流式生成 + 质量门控 + 消息持久化。
+
+        时序：
+        1. 立即 yield "thinking" 事件（通知前端连接已建立）
+        2. run_in_executor 执行同步检索（不阻塞事件循环）
+        3. yield "session" 事件
+        4. 质量门控：reject → 返回预设抱歉消息；weak → 正常回答+免责声明
+        5. chain.astream() 逐 token yield SSE 事件
+        6. yield "references" + "done"，finally 块持久化消息
+        """
         import asyncio
         import time as _time
         _t_request = _time.perf_counter()
         full_answer = ""
-        # Immediately send a thinking event so the browser knows the stream is alive
+        # 立即发送 thinking 事件，通知前端连接已建立
         yield f"data: {json.dumps({'type': 'thinking', 'text': '检索知识库中...'})}\n\n"
 
         # Run retrieval in thread pool to avoid blocking the event loop

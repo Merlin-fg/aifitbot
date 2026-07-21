@@ -1,19 +1,22 @@
-"""RAG 问答服务——查询改写 + 混合检索 + 重排序 + 对话摘要 + 高频缓存。"""
+"""RAG 问答服务 v4——向量 + BM25 混合检索 + 质量门控 + 对话摘要 + 高频缓存。
+
+v3→v4 移除项（评估数据驱动）：
+- HyDE 假设文档：Hit@3 +3.4pp 但不值得一次额外 LLM 调用
+- 多 Query 扩展：Hit@3 -6.6pp，负优化
+- gte-rerank-v2 重排序：Hit@3 -23pp，领域过拟合
+"""
 
 import hashlib
-import json
 import time
 from typing import List, Optional, Dict, Tuple
 
-import requests
 from operator import itemgetter
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from src.repositories.vector_repo import VectorRepository
-from src.config import RAG_K, RAG_MAX_CHUNK, API_KEY, BASE_URL, RAG_HISTORY_ROUNDS
+from src.config import RAG_K, RAG_MAX_CHUNK, RAG_HISTORY_ROUNDS
 from src.utils.logger import logger
 
 SYSTEM_PROMPT = (
@@ -36,38 +39,17 @@ SYSTEM_PROMPT = (
     "\n\n请根据用户档案中的身体数据和目标来个性化你的建议。在回答中显式提及用户的身高、体重、目标和可用器械，让用户感受到建议是为他们量身定制的。"
 )
 
-QUERY_REWRITE_PROMPT = (
-    "将用户的健身口语化问题改写为用于检索知识库的关键词。"
-    "把口语表达替换为标准健身术语，提取核心概念。只输出改写后的关键词，不要解释。\n"
-    "示例：'怎么把胳膊练粗' → '肱二头肌 肱三头肌 增肌训练 手臂动作'\n"
-    "示例：'肚子太大了想减掉' → '减脂 腹部 热量缺口 有氧运动 腹肌训练'\n"
-    "示例：'我想胸肌变大' → '胸大肌 增肌训练 卧推 胸部动作'\n"
-    "现在改写：{question}"
-)
-
 SUMMARIZE_PROMPT = (
     "将以下对话历史压缩为一段简短摘要（不超过150字），"
     "只保留关键的健身问题和教练建议的核心要点。\n\n"
     "对话历史：\n{history}\n\n摘要："
 )
 
-HYDE_PROMPT = (
-    "你是专业的健身教练。下面的用户问题可能表达不完整或过于简短。"
-    "请你把它扩展成一段100-200字的「理想健身教材段落」，"
-    "就像你在编写一本健身百科全书中对应的章节那样去写。"
-    "不要写成对话形式，要写成教材风格的专业段落。\n"
-    "用户问题：{question}\n"
-    "教材段落："
-)
-
 class RAGService:
-    """RAG 服务 v4——向量 + BM25 混合检索 + 质量门控 + 对话摘要 + 高频缓存（极简快速版）。
+    """RAG 服务 v4——向量 + BM25 混合检索 + 质量门控 + 对话摘要 + 高频缓存。
 
-    优化原则：每个组件必须有评估数据支撑。速度优先，零额外 LLM 调用。
-    - 保留 BM25 + 向量混合检索（Hit@3 93.3%）✓
-    - 移除 HyDE（Hit@3 96.7%→93.3%，损失 3.4pp，省一次 LLM 调用）✗
-    - 移除多 Query（Hit@3 86.7%，负优化）✗
-    - 移除 rerank（Hit@3 70%，过拟合）✗
+    极简检索管道：快速预检 → 混合检索 → 质量门控 → 上下文构建。
+    零额外 LLM 调用，端到端 ~3s。
     """
 
     # 高频缓存
@@ -75,18 +57,10 @@ class RAGService:
     _CACHE_TTL = 3600
     _CACHE_MAX_SIZE = 100
 
-    # 重排序 API 端点
-    _RERANK_URL = (
-        (BASE_URL or "").rstrip("/").replace("/compatible-mode/v1", "")
-        + "/api/v1/services/rerank/text-rerank/text-rerank"
-    ) if BASE_URL else ""
-
     def __init__(self, llm, vector_repo: VectorRepository):
         self.llm = llm
         self.vector_repo = vector_repo
         self._chain = None
-        self._rewrite_chain = None
-        self._hyde_chain = None
 
     @classmethod
     def _cache_key(cls, question: str) -> str:
@@ -112,55 +86,6 @@ class RAGService:
             oldest = min(cls._cache.items(), key=lambda x: x[1][1])
             del cls._cache[oldest[0]]
         cls._cache[cls._cache_key(question)] = (result, time.time())
-
-    def _rerank(self, query: str, docs: List,
-                top_k: int = 3) -> Tuple[List, List[float]]:
-        """阿里云 DashScope gte-rerank 重排序。
-
-        对检索结果做二次精排，提升 Top-k 准确率。
-
-        Returns:
-            (reranked_docs, relevance_scores) — 排序后的文档和对齐的关联分数
-        """
-        if not docs or not self._RERANK_URL:
-            return docs, [0.0] * len(docs[:top_k])
-
-        documents = [d.page_content[:500] for d in docs]
-        try:
-            resp = requests.post(
-                self._RERANK_URL,
-                headers={
-                    "Authorization": f"Bearer {API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "gte-rerank-v2",
-                    "input": {"query": query, "documents": documents},
-                    "top_n": top_k,
-                    "return_documents": False,
-                },
-                timeout=15,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("output", {}).get("results", [])
-                if results:
-                    # 按 relevance_score 降序重排
-                    ranked = sorted(results, key=lambda x: x.get("relevance_score", 0),
-                                    reverse=True)
-                    reranked = [docs[r["index"]] for r in ranked[:top_k]
-                               if r["index"] < len(docs)]
-                    reranked_scores = [r.get("relevance_score", 0)
-                                      for r in ranked[:top_k]
-                                      if r["index"] < len(docs)]
-                    logger.info(
-                        f"重排序: {len(docs)} → {len(reranked)} (gte-rerank), "
-                        f"top score: {reranked_scores[0] if reranked_scores else 0:.3f}"
-                    )
-                    return reranked, reranked_scores
-        except Exception as e:
-            logger.warning(f"重排序失败（降级使用原始结果）: {e}")
-        return docs[:top_k], [0.0] * len(docs[:top_k])
 
     def _summarize_history(self, chat_history: List) -> List:
         """对话摘要压缩：超 6 轮时，将旧消息压缩为摘要。
@@ -201,56 +126,6 @@ class RAGService:
 
         return recent_msgs  # 降级：直接截断
 
-    def _get_rewrite_chain(self):
-        """查询改写链（轻量，只做关键词提取）。"""
-        if self._rewrite_chain is None:
-            prompt = ChatPromptTemplate.from_messages([
-                ("human", QUERY_REWRITE_PROMPT),
-            ])
-            self._rewrite_chain = prompt | self.llm | StrOutputParser()
-        return self._rewrite_chain
-
-    def _rewrite_query(self, user_input: str) -> str:
-        """将用户口语化问题改写为标准检索词。"""
-        try:
-            chain = self._get_rewrite_chain()
-            rewritten = chain.invoke({"question": user_input}).strip()
-            # 排除明显无效的改写：空返回、返回原文、返回过长文本
-            if (rewritten and rewritten != user_input
-                    and len(rewritten) < len(user_input) * 5):
-                logger.info(f"查询改写: '{user_input[:40]}...' → '{rewritten[:60]}...'")
-                return rewritten
-        except Exception as e:
-            logger.warning(f"查询改写失败，使用原始问题: {e}")
-        return user_input
-
-    def _get_hyde_chain(self):
-        """HyDE 链——生成假设性文档，用于消弭短查询与知识库之间的语义鸿沟。"""
-        if self._hyde_chain is None:
-            prompt = ChatPromptTemplate.from_messages([
-                ("human", HYDE_PROMPT),
-            ])
-            self._hyde_chain = prompt | self.llm | StrOutputParser()
-        return self._hyde_chain
-
-    def _hyde_generate(self, user_input: str) -> str:
-        """生成假设性文档（Hypothetical Document）。
-
-        让 LLM 先"虚构"一段理想的知识库内容，用这段内容的 embedding
-        去做向量检索，匹配度远高于直接用口语化短 query。
-
-        失败时返回空字符串，调用方降级使用原始 query。
-        """
-        try:
-            chain = self._get_hyde_chain()
-            hyde_doc = chain.invoke({"question": user_input}).strip()
-            if hyde_doc and len(hyde_doc) >= 30:
-                logger.info(f"HyDE 生成: {len(hyde_doc)} chars → '{hyde_doc[:60]}...'")
-                return hyde_doc
-        except Exception as e:
-            logger.warning(f"HyDE 生成失败: {e}")
-        return ""
-
     def _get_chain(self):
         """构建 LangChain RAG 管道（带对话历史支持）。"""
         if self._chain is None:
@@ -280,33 +155,6 @@ class RAGService:
                 | StrOutputParser()
             )
         return self._chain
-
-    def _rrf_merge(self, result_groups: List[Tuple[List, List]],
-                   top_k: int = 5) -> Tuple[List, List]:
-        """RRF 融合——合并多路检索结果（HyDE + 原始 query 等）。
-
-        Args:
-            result_groups: [(docs, scores), ...]，每路一个元素
-            top_k: 返回文档数
-        Returns:
-            (merged_docs, merged_scores)
-        """
-        RRF_K = 60
-        doc_scores: Dict[str, Tuple[any, float]] = {}
-
-        for docs, _scores in result_groups:
-            for rank, doc in enumerate(docs, 1):
-                key = doc.page_content[:80]  # 前80字做去重键
-                rrf = 1.0 / (RRF_K + rank)
-                if key in doc_scores:
-                    doc_scores[key] = (doc, doc_scores[key][1] + rrf)
-                else:
-                    doc_scores[key] = (doc, rrf)
-
-        ranked = sorted(doc_scores.values(), key=lambda x: x[1], reverse=True)
-        merged_docs = [r[0] for r in ranked[:top_k]]
-        merged_scores = [r[1] for r in ranked[:top_k]]
-        return merged_docs, merged_scores
 
     def retrieve(self, user_input: str) -> dict:
         """检索管道 v4——向量 + BM25 混合检索 + 质量门控（极简快速版）。

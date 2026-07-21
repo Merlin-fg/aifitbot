@@ -43,6 +43,8 @@
 </div>
 
 <script>
+// 配置 marked 禁用原始 HTML，防止知识库投毒 XSS
+if(typeof marked!=='undefined') marked.setOptions({html:false});
 let activeSessionId=0,isStreaming=false,streamingSessionId=0,streamAbortController=null,streamFullAnswer='',streamReferences=null,streamQuestion='';
 
 async function handleStreamSubmit(e){
